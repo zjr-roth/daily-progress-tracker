@@ -19,6 +19,7 @@ import {
 	calculateStreakData,
 	exportToCSV,
 } from "./lib/utils";
+import Image from "next/image";
 
 export default function HomePage() {
 	const {
@@ -67,11 +68,14 @@ export default function HomePage() {
 	return (
 		<div className="container mx-auto px-4 py-8 max-w-7xl">
 			{/* Header */}
-			<header className="text-left mb-8">
-				<h1 className="text-4xl font-bold ">Atomic</h1>
-				<p className="text-md font-light text-muted-foreground">
-					"Level up your productivity"
-				</p>
+			<header className="text-left mb-8 flex flex-row items-center">
+				<Image
+					src="/atomic-logo.png"
+					alt="Atomic"
+					width={100}
+					height={100}
+				/>
+				<h1 className="text-4xl text-orange-400 font-light">Atomic</h1>
 			</header>
 
 			{/* Date Selection and Progress Overview */}
