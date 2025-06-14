@@ -1,4 +1,3 @@
-// src/lib/types.ts
 export interface Task {
     id: string;
     name: string;
@@ -33,4 +32,26 @@ export interface Task {
     maxStreak: number;
     perfectStreak: number;
     totalDays: number;
+  }
+
+  export interface UsersData {
+    id: string;
+    created_at: string;
+    updated_at: string;
+    email: string;
+    full_name: string;
+  }
+
+  export interface DailyData {
+    id: string;
+    user_id: string;
+    date: string;
+    tasks: any[];
+    schedule_items: any[];
+    progress_metrics: Record<string, any>;
+    completion_status: Record<string, any>;
+    completion_percentage: number;
+    incomplete_tasks: string[];
+    created_at: string;
+    updated_at: string;
   }

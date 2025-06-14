@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Download } from "lucide-react";
+import { Download, LogOut, User, Loader2 } from "lucide-react";
 import { useProgressData } from "./hooks/useProgressData";
 import { DateSelector } from "./components/DateSelector";
 import { ProgressCircle } from "./components/ProgressCircle";
@@ -12,6 +12,8 @@ import { AnalysisSection } from "./components/AnalysisSection";
 import { StreakStats } from "./components/StreakStats";
 import { Button } from "./components/ui/button";
 import { Card, CardContent } from "./components/ui/card";
+import { ProtectedRoute } from "./components/auth/ProtectedRoute";
+import { useAuth } from "./contexts/AuthContext";
 import { tasks } from "./data/tasks";
 import {
 	formatDisplayDate,
@@ -21,7 +23,38 @@ import {
 } from "./lib/utils";
 import Image from "next/image";
 
-export default function HomePage() {
+const randomGreeting = [
+	"Hey",
+	"Hello",
+	"Hi",
+	"Let's get after it",
+	"Welcome back",
+	"Good to see you",
+	"Let's level up",
+	"Let's get it",
+	"Ready to seize the day",
+];
+
+// Get consistent daily greeting based on current date
+const getDailyGreeting = () => {
+	const today = new Date();
+	const dateString = today.toDateString(); // e.g., "Mon Dec 25 2023"
+
+	// Simple hash function to convert date string to number
+	let hash = 0;
+	for (let i = 0; i < dateString.length; i++) {
+		const char = dateString.charCodeAt(i);
+		hash = (hash << 5) - hash + char;
+		hash = hash & hash; // Convert to 32-bit integer
+	}
+
+	// Use absolute value to ensure positive index
+	const index = Math.abs(hash) % randomGreeting.length;
+	return randomGreeting[index];
+};
+
+function DashboardContent() {
+	const { user, signOut } = useAuth();
 	const {
 		progressData,
 		currentDate,
@@ -30,6 +63,9 @@ export default function HomePage() {
 		updateTaskCompletion,
 		getDateProgress,
 		goToToday,
+		loading,
+		error,
+		refreshData,
 	} = useProgressData();
 
 	// Don't render anything until currentDate is set to avoid hydration issues
@@ -37,8 +73,11 @@ export default function HomePage() {
 		return (
 			<div className="container mx-auto px-4 py-8 max-w-7xl">
 				<div className="flex items-center justify-center h-64">
-					<div className="text-lg text-muted-foreground">
-						Loading...
+					<div className="text-center">
+						<Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+						<div className="text-lg text-muted-foreground">
+							Loading...
+						</div>
 					</div>
 				</div>
 			</div>
@@ -65,17 +104,58 @@ export default function HomePage() {
 		exportToCSV(progressData, tasks);
 	};
 
+	const handleSignOut = async () => {
+		try {
+			await signOut();
+		} catch (error) {
+			console.error("Error signing out:", error);
+		}
+	};
+
 	return (
 		<div className="container mx-auto px-4 py-8 max-w-7xl">
-			{/* Header */}
-			<header className="text-left mb-8 flex flex-row items-center">
-				<Image
-					src="/atomic-logo.png"
-					alt="Atomic"
-					width={100}
-					height={100}
-				/>
-				<h1 className="text-4xl text-orange-400 font-light">Atomic</h1>
+			{/* Header with User Info */}
+			<header className="flex justify-between items-center mb-8">
+				<div className="flex items-center">
+					<Image
+						src="/atomic-logo.png"
+						alt="Atomic"
+						width={100}
+						height={100}
+					/>
+					<h1 className="text-2xl text-orange-400 font-light">
+						Atomic
+					</h1>
+				</div>
+
+				<div className="flex items-center text-sm text-muted-foreground">
+					<div className="flex flex-col items-center">
+						<h1 className="text-5xl font-semibold mb-2">
+							{getDailyGreeting()}{" "}
+							<span>{user?.user_metadata.full_name}</span>!
+						</h1>
+					</div>
+				</div>
+
+				<div className="flex items-center gap-4">
+					{error && (
+						<div className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md flex items-center gap-2">
+							<span>{error}</span>
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={refreshData}
+							>
+								Retry
+							</Button>
+						</div>
+					)}
+
+					<Button variant="outline" size="sm" onClick={handleSignOut}>
+						<LogOut className="h-4 w-4 mr-2" />
+						Sign Out
+					</Button>
+				</div>
 			</header>
 
 			{/* Date Selection and Progress Overview */}
@@ -108,6 +188,12 @@ export default function HomePage() {
 									{completedTasks} of {tasks.length} tasks
 									completed
 								</p>
+								{loading && (
+									<p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+										<Loader2 className="h-3 w-3 animate-spin" />
+										Syncing...
+									</p>
+								)}
 							</div>
 						</div>
 
@@ -164,6 +250,9 @@ export default function HomePage() {
 								variant="outline"
 								size="sm"
 								onClick={handleExport}
+								disabled={
+									Object.keys(progressData).length === 0
+								}
 							>
 								<Download className="w-4 h-4 mr-2" />
 								Export CSV
@@ -191,5 +280,13 @@ export default function HomePage() {
 				<StreakStats streakData={streakData} />
 			</section>
 		</div>
+	);
+}
+
+export default function HomePage() {
+	return (
+		<ProtectedRoute>
+			<DashboardContent />
+		</ProtectedRoute>
 	);
 }

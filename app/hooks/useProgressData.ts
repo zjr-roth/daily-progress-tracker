@@ -1,17 +1,46 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { ProgressData, DayProgress, Task } from '../lib/types';
-import { useLocalStorage } from './useLocalStorage';
 import { tasks } from '../data/tasks';
 import { formatDate } from '../lib/utils';
+import { useAuth } from '../contexts/AuthContext';
+import { DailyDataService } from '../lib/dailyDataService';
 
 export function useProgressData() {
-  const [progressData, setProgressData] = useLocalStorage<ProgressData>('dailyProgressData', {});
+  const { user } = useAuth();
+  const [progressData, setProgressData] = useState<ProgressData>({});
   const [currentDate, setCurrentDate] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Set current date after component mounts to avoid hydration issues
   useEffect(() => {
     setCurrentDate(formatDate(new Date()));
   }, []);
+
+  // Load progress data when user changes
+  useEffect(() => {
+    if (user?.id) {
+      loadProgressData();
+    } else {
+      setProgressData({});
+    }
+  }, [user?.id]);
+
+  const loadProgressData = useCallback(async () => {
+    if (!user?.id) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await DailyDataService.getProgressData(user.id);
+      setProgressData(data);
+    } catch (error) {
+      console.error('Error loading progress data:', error);
+      setError('Failed to load progress data');
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id]);
 
   const isTaskCompleted = useCallback((taskId: string, date: string): boolean => {
     if (!progressData[date]) {
@@ -25,47 +54,94 @@ export function useProgressData() {
     return !incompleteTasks.includes(task.name);
   }, [progressData]);
 
-  const updateTaskCompletion = useCallback((taskId: string, isCompleted: boolean, date: string) => {
+  const updateTaskCompletion = useCallback(async (taskId: string, isCompleted: boolean, date: string) => {
+    if (!user?.id) return;
+
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
-    setProgressData(prevData => {
-      const newData = { ...prevData };
+    setLoading(true);
+    setError(null);
 
-      // Initialize date data if it doesn't exist
-      if (!newData[date]) {
-        newData[date] = {
-          completionPercentage: 0,
-          incompleteTasks: tasks.map(t => t.name)
-        };
-      }
+    try {
+      // Update local state optimistically
+      setProgressData(prevData => {
+        const newData = { ...prevData };
 
-      const dateData = { ...newData[date] };
-      const incompleteTasks = [...(dateData.incompleteTasks || [])];
+        // Initialize date data if it doesn't exist
+        if (!newData[date]) {
+          newData[date] = {
+            completionPercentage: 0,
+            incompleteTasks: tasks.map(t => t.name)
+          };
+        }
+
+        const dateData = { ...newData[date] };
+        const incompleteTasks = [...(dateData.incompleteTasks || [])];
+
+        if (isCompleted) {
+          // Remove from incomplete tasks
+          const index = incompleteTasks.indexOf(task.name);
+          if (index > -1) {
+            incompleteTasks.splice(index, 1);
+          }
+        } else {
+          // Add to incomplete tasks
+          if (!incompleteTasks.includes(task.name)) {
+            incompleteTasks.push(task.name);
+          }
+        }
+
+        // Update completion percentage
+        const totalTasks = tasks.length;
+        const completedTasks = totalTasks - incompleteTasks.length;
+        dateData.completionPercentage = Math.round((completedTasks / totalTasks) * 100);
+        dateData.incompleteTasks = incompleteTasks;
+
+        newData[date] = dateData;
+        return newData;
+      });
+
+      // Calculate updated values for database
+      const currentData = progressData[date] || {
+        completionPercentage: 0,
+        incompleteTasks: tasks.map(t => t.name)
+      };
+
+      const incompleteTasks = [...(currentData.incompleteTasks || [])];
 
       if (isCompleted) {
-        // Remove from incomplete tasks
         const index = incompleteTasks.indexOf(task.name);
         if (index > -1) {
           incompleteTasks.splice(index, 1);
         }
       } else {
-        // Add to incomplete tasks
         if (!incompleteTasks.includes(task.name)) {
           incompleteTasks.push(task.name);
         }
       }
 
-      // Update completion percentage
       const totalTasks = tasks.length;
       const completedTasks = totalTasks - incompleteTasks.length;
-      dateData.completionPercentage = Math.round((completedTasks / totalTasks) * 100);
-      dateData.incompleteTasks = incompleteTasks;
+      const completionPercentage = Math.round((completedTasks / totalTasks) * 100);
 
-      newData[date] = dateData;
-      return newData;
-    });
-  }, [setProgressData]);
+      // Update database
+      await DailyDataService.updateTaskCompletion(
+        user.id,
+        date,
+        incompleteTasks,
+        completionPercentage
+      );
+
+    } catch (error) {
+      console.error('Error updating task completion:', error);
+      setError('Failed to update task completion');
+      // Reload data to ensure consistency
+      loadProgressData();
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id, progressData, loadProgressData]);
 
   const getDateProgress = useCallback((date: string): DayProgress => {
     return progressData[date] || {
@@ -78,6 +154,10 @@ export function useProgressData() {
     setCurrentDate(formatDate(new Date()));
   }, []);
 
+  const refreshData = useCallback(() => {
+    loadProgressData();
+  }, [loadProgressData]);
+
   // Memoize the return object to prevent unnecessary re-renders
   return useMemo(() => ({
     progressData,
@@ -87,7 +167,9 @@ export function useProgressData() {
     updateTaskCompletion,
     getDateProgress,
     goToToday,
-    setProgressData
+    loading,
+    error,
+    refreshData
   }), [
     progressData,
     currentDate,
@@ -95,6 +177,8 @@ export function useProgressData() {
     updateTaskCompletion,
     getDateProgress,
     goToToday,
-    setProgressData
+    loading,
+    error,
+    refreshData
   ]);
 }
