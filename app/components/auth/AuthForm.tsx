@@ -19,19 +19,12 @@ interface AuthFormProps {
 	onForgotPassword?: () => void;
 }
 
-interface FormErrors {
-	email?: string;
-	password?: string;
-	fullName?: string;
-	confirmPassword?: string;
-}
-
 export function AuthForm({
 	mode,
 	onToggleMode,
 	onForgotPassword,
 }: AuthFormProps) {
-	const { signIn, signUp, loading } = useAuth();
+	const { signIn, signUp, loading, errors, clearErrors } = useAuth();
 	const [formData, setFormData] = useState({
 		email: "",
 		password: "",
@@ -39,159 +32,111 @@ export function AuthForm({
 		confirmPassword: "",
 	});
 	const [showPassword, setShowPassword] = useState(false);
-	const [errors, setErrors] = useState<FormErrors>({});
 	const [emailVerificationSent, setEmailVerificationSent] = useState(false);
-
-	const clearErrors = () => {
-		setErrors({});
-	};
-
-	const setFieldError = (field: keyof FormErrors, message: string) => {
-		setErrors((prev) => ({
-			...prev,
-			[field]: message,
-		}));
-	};
+	const [localErrors, setLocalErrors] = useState<{
+		confirmPassword?: string;
+		password?: string;
+	}>({});
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
-		clearErrors();
+		console.log("AuthForm: Form submitted, current mode:", mode);
 
-		// Basic validation
+		// Clear both context and local errors
+		clearErrors();
+		setLocalErrors({});
+
 		if (mode === "signup") {
+			// Client-side validation for signup
+			let hasValidationErrors = false;
+
 			if (formData.password.length < 6) {
-				setFieldError(
-					"password",
-					"Password must be at least 6 characters"
-				);
-				return;
+				setLocalErrors((prev) => ({
+					...prev,
+					password: "Password must be at least 6 characters.",
+				}));
+				hasValidationErrors = true;
 			}
 			if (formData.password !== formData.confirmPassword) {
-				setFieldError("confirmPassword", "Passwords do not match");
-				return;
+				setLocalErrors((prev) => ({
+					...prev,
+					confirmPassword: "Passwords do not match.",
+				}));
+				hasValidationErrors = true;
 			}
-			if (!formData.fullName.trim()) {
-				setFieldError("fullName", "Full name is required");
+
+			if (hasValidationErrors) {
 				return;
 			}
 		}
 
 		try {
 			if (mode === "signin") {
+				console.log("AuthForm: Attempting signin...");
 				await signIn(formData.email, formData.password);
+				console.log("AuthForm: Signin completed");
 			} else {
+				console.log("AuthForm: Attempting signup...");
 				await signUp(
 					formData.email,
 					formData.password,
 					formData.fullName
 				);
-				setEmailVerificationSent(true);
+				// If signup succeeds without errors, show verification message
+				if (Object.keys(errors).length === 0) {
+					setEmailVerificationSent(true);
+				}
 			}
 		} catch (error: any) {
-			const errorMessage =
-				error?.message || "An unexpected error occurred";
-
-			// Determine which field the error relates to
-			if (
-				errorMessage.includes("password you entered is incorrect") ||
-				errorMessage.includes("password") ||
-				errorMessage.includes("Invalid login credentials")
-			) {
-				setFieldError(
-					"password",
-					"The password you entered is incorrect. Please try again."
-				);
-			} else if (
-				errorMessage.includes("email address was not found") ||
-				errorMessage.includes("email") ||
-				errorMessage.includes("not found")
-			) {
-				setFieldError(
-					"email",
-					"An account with this email address was not found. Please check your email or sign up for a new account."
-				);
-			} else if (
-				errorMessage.includes("email not confirmed") ||
-				errorMessage.includes("verification")
-			) {
-				setFieldError(
-					"email",
-					"Please check your email and click the verification link to activate your account before signing in."
-				);
-			} else if (errorMessage.includes("too many")) {
-				setFieldError(
-					"email",
-					"Too many sign-in attempts. Please wait a few minutes before trying again."
-				);
-			} else {
-				// Default to email field for general errors
-				setFieldError("email", errorMessage);
-			}
+			// Errors are now handled in the AuthContext
+			console.log("AuthForm: Error occurred, but handled in context");
 		}
 	};
 
 	const handleInputChange = (field: string, value: string) => {
 		setFormData((prev) => ({ ...prev, [field]: value }));
-		// Clear field-specific error when user starts typing
-		if (errors[field as keyof FormErrors]) {
-			setErrors((prev) => ({
-				...prev,
-				[field]: undefined,
-			}));
+
+		// Clear context errors for the field being edited
+		if (errors[field as keyof typeof errors]) {
+			clearErrors();
+		}
+
+		// Clear local errors for the field being edited
+		if (localErrors[field as keyof typeof localErrors]) {
+			setLocalErrors((prev) => ({ ...prev, [field]: undefined }));
 		}
 	};
 
-	// Show email verification alert if signup was successful
+	// Combine context errors with local validation errors
+	const getFieldError = (field: string) => {
+		return (
+			errors[field as keyof typeof errors] ||
+			localErrors[field as keyof typeof localErrors]
+		);
+	};
+
 	if (emailVerificationSent) {
 		return (
 			<Card className="w-full max-w-md mx-auto">
 				<CardHeader className="text-center">
 					<div className="flex justify-center mb-4">
-						<div className="w-16 h-16 bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center">
-							<CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" />
-						</div>
+						<CheckCircle className="w-16 h-16 text-green-500" />
 					</div>
-					<CardTitle className="text-2xl text-green-600 dark:text-green-400">
+					<CardTitle className="text-2xl">
 						Check Your Email!
 					</CardTitle>
 				</CardHeader>
-				<CardContent className="text-center space-y-4">
-					<div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-						<div className="flex items-start space-x-3">
-							<AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-							<div className="text-left">
-								<p className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">
-									Verification Required
-								</p>
-								<p className="text-sm text-blue-700 dark:text-blue-300">
-									A verification link has been sent to your
-									email. Please check your email and click the
-									verification link to activate your account.
-									You will then be redirected back to the
-									application.
-								</p>
-							</div>
-						</div>
-					</div>
-
-					<div className="text-sm text-muted-foreground">
-						<p>
-							Didn't receive the email? Check your spam folder or
-						</p>
-						<button
-							onClick={() => setEmailVerificationSent(false)}
-							className="text-primary hover:underline font-medium"
-						>
-							try signing up again
-						</button>
-					</div>
-
-					<div className="pt-4 border-t">
+				<CardContent className="text-center">
+					<p className="text-muted-foreground">
+						A verification link has been sent to your email. Please
+						click the link to activate your account.
+					</p>
+					<div className="mt-4">
 						<button
 							onClick={onToggleMode}
 							className="text-sm text-primary hover:underline font-medium"
 						>
-							Already verified? Sign in here
+							Back to Sign In
 						</button>
 					</div>
 				</CardContent>
@@ -227,17 +172,14 @@ export function AuthForm({
 										e.target.value
 									)
 								}
-								className={
-									errors.fullName
-										? "border-red-500 focus:border-red-500"
-										: ""
-								}
+								aria-invalid={!!getFieldError("fullName")}
 								required
 							/>
-							{errors.fullName && (
-								<p className="text-sm text-red-600 dark:text-red-400">
-									{errors.fullName}
-								</p>
+							{getFieldError("fullName") && (
+								<div className="text-sm text-red-600 font-medium flex items-center gap-1 bg-red-50 p-2 rounded border border-red-200">
+									<AlertCircle className="w-4 h-4 text-red-500" />
+									<span>{getFieldError("fullName")}</span>
+								</div>
 							)}
 						</div>
 					)}
@@ -252,17 +194,17 @@ export function AuthForm({
 							onChange={(e) =>
 								handleInputChange("email", e.target.value)
 							}
+							aria-invalid={!!getFieldError("email")}
 							className={
-								errors.email
-									? "border-red-500 focus:border-red-500"
-									: ""
+								getFieldError("email") ? "border-red-500" : ""
 							}
 							required
 						/>
-						{errors.email && (
-							<p className="text-sm text-red-600 dark:text-red-400">
-								{errors.email}
-							</p>
+						{getFieldError("email") && (
+							<div className="text-sm text-red-600 font-medium flex items-center gap-1 bg-red-50 p-2 rounded border border-red-200">
+								<AlertCircle className="w-4 h-4 text-red-500" />
+								<span>{getFieldError("email")}</span>
+							</div>
 						)}
 					</div>
 
@@ -280,9 +222,10 @@ export function AuthForm({
 										e.target.value
 									)
 								}
+								aria-invalid={!!getFieldError("password")}
 								className={
-									errors.password
-										? "border-red-500 focus:border-red-500"
+									getFieldError("password")
+										? "border-red-500"
 										: ""
 								}
 								required
@@ -299,10 +242,11 @@ export function AuthForm({
 								)}
 							</button>
 						</div>
-						{errors.password && (
-							<p className="text-sm text-red-600 dark:text-red-400">
-								{errors.password}
-							</p>
+						{getFieldError("password") && (
+							<div className="text-sm text-red-600 font-medium flex items-center gap-1 bg-red-50 p-2 rounded border border-red-200">
+								<AlertCircle className="w-4 h-4 text-red-500" />
+								<span>{getFieldError("password")}</span>
+							</div>
 						)}
 					</div>
 
@@ -322,17 +266,18 @@ export function AuthForm({
 										e.target.value
 									)
 								}
-								className={
-									errors.confirmPassword
-										? "border-red-500 focus:border-red-500"
-										: ""
+								aria-invalid={
+									!!getFieldError("confirmPassword")
 								}
 								required
 							/>
-							{errors.confirmPassword && (
-								<p className="text-sm text-red-600 dark:text-red-400">
-									{errors.confirmPassword}
-								</p>
+							{getFieldError("confirmPassword") && (
+								<div className="text-sm text-red-600 font-medium flex items-center gap-1 bg-red-50 p-2 rounded border border-red-200">
+									<AlertCircle className="w-4 h-4 text-red-500" />
+									<span>
+										{getFieldError("confirmPassword")}
+									</span>
+								</div>
 							)}
 						</div>
 					)}
@@ -344,7 +289,6 @@ export function AuthForm({
 						{mode === "signin" ? "Sign In" : "Create Account"}
 					</Button>
 
-					{/* Forgot Password Link */}
 					{mode === "signin" && onForgotPassword && (
 						<div className="text-center">
 							<button
