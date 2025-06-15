@@ -11,7 +11,8 @@ import {
 	CardTitle,
 } from "@/app/components/ui/card";
 import { useAuth } from "../../contexts/AuthContext";
-import { Eye, EyeOff, Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
+import { EmailVerificationAlert } from "./EmailVerificationAlert";
 
 interface AuthFormProps {
 	mode: "signin" | "signup";
@@ -115,32 +116,22 @@ export function AuthForm({
 		);
 	};
 
+	const handleResendEmail = async () => {
+		try {
+			await signUp(formData.email, formData.password, formData.fullName);
+		} catch (error) {
+			console.error("Failed to resend verification email:", error);
+			throw error;
+		}
+	};
+
 	if (emailVerificationSent) {
 		return (
-			<Card className="w-full max-w-md mx-auto">
-				<CardHeader className="text-center">
-					<div className="flex justify-center mb-4">
-						<CheckCircle className="w-16 h-16 text-green-500" />
-					</div>
-					<CardTitle className="text-2xl">
-						Check Your Email!
-					</CardTitle>
-				</CardHeader>
-				<CardContent className="text-center">
-					<p className="text-muted-foreground">
-						A verification link has been sent to your email. Please
-						click the link to activate your account.
-					</p>
-					<div className="mt-4">
-						<button
-							onClick={onToggleMode}
-							className="text-sm text-primary hover:underline font-medium"
-						>
-							Back to Sign In
-						</button>
-					</div>
-				</CardContent>
-			</Card>
+			<EmailVerificationAlert
+				email={formData.email}
+				onBackToSignIn={onToggleMode}
+				onResendEmail={handleResendEmail}
+			/>
 		);
 	}
 
