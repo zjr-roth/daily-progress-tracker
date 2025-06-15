@@ -11,6 +11,7 @@ interface TaskListProps {
 	timeBlock: TimeBlock;
 	isTaskCompleted: (taskId: string) => boolean;
 	onTaskToggle: (taskId: string, completed: boolean) => void;
+	onTaskEdit?: (taskId: string, updatedTask: Partial<Task>) => void;
 }
 
 const blockTitles: Record<TimeBlock, string> = {
@@ -30,11 +31,12 @@ export function TaskList({
 	timeBlock,
 	isTaskCompleted,
 	onTaskToggle,
+	onTaskEdit,
 }: TaskListProps) {
 	const blockTasks = tasks.filter((task) => task.block === timeBlock);
 
 	return (
-		<Card className={cn("border-l-4", blockColors[timeBlock])}>
+		<Card className={cn("border-l-4 group", blockColors[timeBlock])}>
 			<CardHeader className="pb-4">
 				<CardTitle className="text-lg">
 					{blockTitles[timeBlock]}
@@ -48,6 +50,7 @@ export function TaskList({
 							task={task}
 							isCompleted={isTaskCompleted(task.id)}
 							onToggle={onTaskToggle}
+							onEdit={onTaskEdit}
 						/>
 					))}
 				</div>

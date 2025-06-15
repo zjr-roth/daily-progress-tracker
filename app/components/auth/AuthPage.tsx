@@ -2,10 +2,42 @@
 
 import React, { useState } from "react";
 import { AuthForm } from "./AuthForm";
+import { ForgotPassword } from "./ForgotPassword";
 import Image from "next/image";
 
+type AuthView = "signin" | "signup" | "forgot-password";
+
 export function AuthPage() {
-	const [mode, setMode] = useState<"signin" | "signup">("signin");
+	const [currentView, setCurrentView] = useState<AuthView>("signin");
+
+	const handleViewChange = (view: AuthView) => {
+		setCurrentView(view);
+	};
+
+	const toggleSignInSignUp = () => {
+		setCurrentView(currentView === "signin" ? "signup" : "signin");
+	};
+
+	const renderCurrentView = () => {
+		switch (currentView) {
+			case "forgot-password":
+				return (
+					<ForgotPassword
+						onBackToSignIn={() => setCurrentView("signin")}
+					/>
+				);
+			default:
+				return (
+					<AuthForm
+						mode={currentView}
+						onToggleMode={toggleSignInSignUp}
+						onForgotPassword={() =>
+							setCurrentView("forgot-password")
+						}
+					/>
+				);
+		}
+	};
 
 	return (
 		<div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -29,13 +61,8 @@ export function AuthPage() {
 					</p>
 				</div>
 
-				{/* Auth Form */}
-				<AuthForm
-					mode={mode}
-					onToggleMode={() =>
-						setMode(mode === "signin" ? "signup" : "signin")
-					}
-				/>
+				{/* Auth Components */}
+				{renderCurrentView()}
 			</div>
 		</div>
 	);

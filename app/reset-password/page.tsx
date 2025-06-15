@@ -12,8 +12,23 @@ import {
 	CardTitle,
 } from "../components/ui/card";
 import { AuthService } from "../lib/auth";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, CheckCircle, XCircle } from "lucide-react";
 import Image from "next/image";
+
+const passwordRequirements = [
+	{
+		label: "At least 6 characters",
+		test: (password: string) => password.length >= 6,
+	},
+	{
+		label: "At least 1 uppercase letter (A-Z)",
+		test: (password: string) => /[A-Z]/.test(password),
+	},
+	{
+		label: "At least 1 special character (!@#$%&*)",
+		test: (password: string) => /[!@#$%&*]/.test(password),
+	},
+];
 
 export default function ResetPasswordPage() {
 	const router = useRouter();
@@ -21,6 +36,7 @@ export default function ResetPasswordPage() {
 	const [password, setPassword] = useState("");
 	const [confirmPassword, setConfirmPassword] = useState("");
 	const [showPassword, setShowPassword] = useState(false);
+	const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [success, setSuccess] = useState(false);
@@ -40,12 +56,29 @@ export default function ResetPasswordPage() {
 		}
 	}, []);
 
+	const validatePassword = (password: string) => {
+		return passwordRequirements.every((req) => req.test(password));
+	};
+
+	const getPasswordStrength = (password: string) => {
+		const metRequirements = passwordRequirements.filter((req) =>
+			req.test(password)
+		).length;
+		if (metRequirements === 0)
+			return { strength: "weak", color: "text-red-500" };
+		if (metRequirements === 1)
+			return { strength: "weak", color: "text-red-500" };
+		if (metRequirements === 2)
+			return { strength: "medium", color: "text-yellow-500" };
+		return { strength: "strong", color: "text-green-500" };
+	};
+
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		setError(null);
 
-		if (password.length < 6) {
-			setError("Password must be at least 6 characters");
+		if (!validatePassword(password)) {
+			setError("Password does not meet all requirements");
 			return;
 		}
 
@@ -70,6 +103,8 @@ export default function ResetPasswordPage() {
 			setLoading(false);
 		}
 	};
+
+	const passwordStrength = getPasswordStrength(password);
 
 	if (success) {
 		return (
@@ -167,22 +202,94 @@ export default function ResetPasswordPage() {
 										)}
 									</button>
 								</div>
+
+								{/* Password Requirements and Strength Indicator */}
+								{password && (
+									<div className="mt-3 space-y-2">
+										<div className="flex items-center justify-between">
+											<span className="text-sm text-muted-foreground">
+												Password strength:
+											</span>
+											<span
+												className={`text-sm font-medium ${passwordStrength.color}`}
+											>
+												{passwordStrength.strength
+													.charAt(0)
+													.toUpperCase() +
+													passwordStrength.strength.slice(
+														1
+													)}
+											</span>
+										</div>
+
+										<div className="space-y-1">
+											{passwordRequirements.map(
+												(req, index) => {
+													const isMet =
+														req.test(password);
+													return (
+														<div
+															key={index}
+															className="flex items-center gap-2 text-xs"
+														>
+															{isMet ? (
+																<CheckCircle className="h-3 w-3 text-green-500" />
+															) : (
+																<XCircle className="h-3 w-3 text-red-500" />
+															)}
+															<span
+																className={
+																	isMet
+																		? "text-green-600 dark:text-green-400"
+																		: "text-red-600 dark:text-red-400"
+																}
+															>
+																{req.label}
+															</span>
+														</div>
+													);
+												}
+											)}
+										</div>
+									</div>
+								)}
 							</div>
 
 							<div className="space-y-2">
 								<Label htmlFor="confirmPassword">
 									Confirm New Password
 								</Label>
-								<Input
-									id="confirmPassword"
-									type="password"
-									placeholder="Confirm your new password"
-									value={confirmPassword}
-									onChange={(e) =>
-										setConfirmPassword(e.target.value)
-									}
-									required
-								/>
+								<div className="relative">
+									<Input
+										id="confirmPassword"
+										type={
+											showConfirmPassword
+												? "text"
+												: "password"
+										}
+										placeholder="Confirm your new password"
+										value={confirmPassword}
+										onChange={(e) =>
+											setConfirmPassword(e.target.value)
+										}
+										required
+									/>
+									<button
+										type="button"
+										className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+										onClick={() =>
+											setShowConfirmPassword(
+												!showConfirmPassword
+											)
+										}
+									>
+										{showConfirmPassword ? (
+											<EyeOff size={16} />
+										) : (
+											<Eye size={16} />
+										)}
+									</button>
+								</div>
 							</div>
 
 							{error && (
@@ -194,7 +301,9 @@ export default function ResetPasswordPage() {
 							<Button
 								type="submit"
 								className="w-full"
-								disabled={loading}
+								disabled={
+									loading || !validatePassword(password)
+								}
 							>
 								{loading && (
 									<Loader2 className="mr-2 h-4 w-4 animate-spin" />

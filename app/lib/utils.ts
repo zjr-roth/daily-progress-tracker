@@ -1,7 +1,6 @@
-// src/lib/utils.ts
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { ProgressData, Task, CategoryStats, StreakData } from './types';
+import { ProgressData, Task, CategoryStats, StreakData, DayProgress } from './types';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -23,16 +22,31 @@ export function formatDisplayDate(dateString: string): string {
 
 export function calculateCategoryStats(
   tasks: Task[],
-  incompleteTasks: string[]
+  dayProgress: DayProgress
 ): CategoryStats {
   const categories = ['Study', 'Research', 'Personal', 'Dog Care'];
   const categoryData: CategoryStats = {};
 
+  // Use incompleteTaskIds if available, otherwise fall back to incompleteTasks for backward compatibility
+  const incompleteTaskIds = dayProgress.incompleteTaskIds || [];
+  const incompleteTasks = dayProgress.incompleteTasks || [];
+
   categories.forEach(category => {
     const categoryTasks = tasks.filter(t => t.category === category);
-    const completedCategoryTasks = categoryTasks.filter(
-      t => !incompleteTasks.includes(t.name)
-    );
+
+    let completedCategoryTasks: Task[];
+
+    if (incompleteTaskIds.length > 0) {
+      // Use the new ID-based approach
+      completedCategoryTasks = categoryTasks.filter(
+        t => !incompleteTaskIds.includes(t.id)
+      );
+    } else {
+      // Fall back to name-based approach for backward compatibility
+      completedCategoryTasks = categoryTasks.filter(
+        t => !incompleteTasks.includes(t.name)
+      );
+    }
 
     categoryData[category] = {
       completed: completedCategoryTasks.length,
@@ -96,7 +110,7 @@ export function exportToCSV(progressData: ProgressData, tasks: Task[]): void {
     ['Date', 'Completion Percentage', 'Completed Tasks', 'Incomplete Tasks'].join(','),
     ...dates.map(date => {
       const data = progressData[date];
-      const completedCount = tasks.length - data.incompleteTasks.length;
+      const completedCount = tasks.length - (data.incompleteTaskIds?.length || data.incompleteTasks.length);
       const incompleteTasksList = data.incompleteTasks.join('; ');
       return [
         date,

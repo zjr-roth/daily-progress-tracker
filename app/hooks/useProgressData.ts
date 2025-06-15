@@ -47,11 +47,9 @@ export function useProgressData() {
       return false;
     }
 
-    const task = tasks.find(t => t.id === taskId);
-    if (!task) return false;
-
-    const incompleteTasks = progressData[date].incompleteTasks || [];
-    return !incompleteTasks.includes(task.name);
+    // Check if this specific task ID is in the incomplete task IDs array
+    const incompleteTaskIds = progressData[date].incompleteTaskIds || [];
+    return !incompleteTaskIds.includes(taskId);
   }, [progressData]);
 
   const updateTaskCompletion = useCallback(async (taskId: string, isCompleted: boolean, date: string) => {
@@ -72,21 +70,32 @@ export function useProgressData() {
         if (!newData[date]) {
           newData[date] = {
             completionPercentage: 0,
-            incompleteTasks: tasks.map(t => t.name)
+            incompleteTasks: tasks.map(t => t.name),
+            incompleteTaskIds: tasks.map(t => t.id)
           };
         }
 
         const dateData = { ...newData[date] };
+        const incompleteTaskIds = [...(dateData.incompleteTaskIds || [])];
         const incompleteTasks = [...(dateData.incompleteTasks || [])];
 
         if (isCompleted) {
-          // Remove from incomplete tasks
-          const index = incompleteTasks.indexOf(task.name);
-          if (index > -1) {
-            incompleteTasks.splice(index, 1);
+          // Remove from incomplete task IDs
+          const idIndex = incompleteTaskIds.indexOf(taskId);
+          if (idIndex > -1) {
+            incompleteTaskIds.splice(idIndex, 1);
+          }
+          // Remove from incomplete task names (for backward compatibility)
+          const nameIndex = incompleteTasks.indexOf(task.name);
+          if (nameIndex > -1) {
+            incompleteTasks.splice(nameIndex, 1);
           }
         } else {
-          // Add to incomplete tasks
+          // Add to incomplete task IDs
+          if (!incompleteTaskIds.includes(taskId)) {
+            incompleteTaskIds.push(taskId);
+          }
+          // Add to incomplete task names (for backward compatibility)
           if (!incompleteTasks.includes(task.name)) {
             incompleteTasks.push(task.name);
           }
@@ -94,9 +103,10 @@ export function useProgressData() {
 
         // Update completion percentage
         const totalTasks = tasks.length;
-        const completedTasks = totalTasks - incompleteTasks.length;
+        const completedTasks = totalTasks - incompleteTaskIds.length;
         dateData.completionPercentage = Math.round((completedTasks / totalTasks) * 100);
-        dateData.incompleteTasks = incompleteTasks;
+        dateData.incompleteTaskIds = incompleteTaskIds;
+        dateData.incompleteTasks = incompleteTasks; // Keep for backward compatibility
 
         newData[date] = dateData;
         return newData;
@@ -105,32 +115,42 @@ export function useProgressData() {
       // Calculate updated values for database
       const currentData = progressData[date] || {
         completionPercentage: 0,
-        incompleteTasks: tasks.map(t => t.name)
+        incompleteTasks: tasks.map(t => t.name),
+        incompleteTaskIds: tasks.map(t => t.id)
       };
 
+      const incompleteTaskIds = [...(currentData.incompleteTaskIds || [])];
       const incompleteTasks = [...(currentData.incompleteTasks || [])];
 
       if (isCompleted) {
-        const index = incompleteTasks.indexOf(task.name);
-        if (index > -1) {
-          incompleteTasks.splice(index, 1);
+        const idIndex = incompleteTaskIds.indexOf(taskId);
+        if (idIndex > -1) {
+          incompleteTaskIds.splice(idIndex, 1);
+        }
+        const nameIndex = incompleteTasks.indexOf(task.name);
+        if (nameIndex > -1) {
+          incompleteTasks.splice(nameIndex, 1);
         }
       } else {
+        if (!incompleteTaskIds.includes(taskId)) {
+          incompleteTaskIds.push(taskId);
+        }
         if (!incompleteTasks.includes(task.name)) {
           incompleteTasks.push(task.name);
         }
       }
 
       const totalTasks = tasks.length;
-      const completedTasks = totalTasks - incompleteTasks.length;
+      const completedTasks = totalTasks - incompleteTaskIds.length;
       const completionPercentage = Math.round((completedTasks / totalTasks) * 100);
 
       // Update database
       await DailyDataService.updateTaskCompletion(
         user.id,
         date,
-        incompleteTasks,
-        completionPercentage
+        incompleteTasks, // Keep for backward compatibility
+        completionPercentage,
+        incompleteTaskIds // Add new field
       );
 
     } catch (error) {
@@ -144,10 +164,13 @@ export function useProgressData() {
   }, [user?.id, progressData, loadProgressData]);
 
   const getDateProgress = useCallback((date: string): DayProgress => {
-    return progressData[date] || {
+    const defaultProgress = {
       completionPercentage: 0,
-      incompleteTasks: tasks.map(t => t.name)
+      incompleteTasks: tasks.map(t => t.name),
+      incompleteTaskIds: tasks.map(t => t.id)
     };
+
+    return progressData[date] || defaultProgress;
   }, [progressData]);
 
   const goToToday = useCallback(() => {

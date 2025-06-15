@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { Download, LogOut, User, Loader2 } from "lucide-react";
 import { useProgressData } from "./hooks/useProgressData";
 import { DateSelector } from "./components/DateSelector";
@@ -14,7 +14,8 @@ import { Button } from "./components/ui/button";
 import { Card, CardContent } from "./components/ui/card";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { useAuth } from "./contexts/AuthContext";
-import { tasks } from "./data/tasks";
+import { tasks as defaultTasks } from "./data/tasks";
+import { Task } from "./lib/types";
 import {
 	formatDisplayDate,
 	calculateCategoryStats,
@@ -68,6 +69,9 @@ function DashboardContent() {
 		refreshData,
 	} = useProgressData();
 
+	// Local state for task management
+	const [tasks, setTasks] = useState<Task[]>(defaultTasks);
+
 	// Don't render anything until currentDate is set to avoid hydration issues
 	if (!currentDate) {
 		return (
@@ -86,14 +90,32 @@ function DashboardContent() {
 
 	const dateProgress = getDateProgress(currentDate);
 	const completedTasks = tasks.length - dateProgress.incompleteTasks.length;
-	const categoryStats = calculateCategoryStats(
-		tasks,
-		dateProgress.incompleteTasks
-	);
+	const categoryStats = calculateCategoryStats(tasks, dateProgress);
 	const streakData = calculateStreakData(progressData);
 
 	const handleTaskToggle = (taskId: string, completed: boolean) => {
 		updateTaskCompletion(taskId, completed, currentDate);
+	};
+
+	const handleTaskEdit = (taskId: string, updatedTask: Partial<Task>) => {
+		setTasks((prevTasks) =>
+			prevTasks.map((task) =>
+				task.id === taskId ? { ...task, ...updatedTask } : task
+			)
+		);
+
+		// Show success message
+		const toast = document.createElement("div");
+		toast.className =
+			"fixed top-4 right-4 bg-green-100 dark:bg-green-900 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 px-4 py-2 rounded-lg shadow-lg z-50";
+		toast.textContent = "Task updated successfully!";
+		document.body.appendChild(toast);
+
+		setTimeout(() => {
+			if (document.body.contains(toast)) {
+				document.body.removeChild(toast);
+			}
+		}, 3000);
 	};
 
 	const handleDateClick = (date: string) => {
@@ -207,9 +229,14 @@ function DashboardContent() {
 
 			{/* Task Lists */}
 			<section className="mb-8">
-				<h2 className="text-2xl font-semibold mb-6">
-					Daily Schedule & Tasks
-				</h2>
+				<div className="flex justify-between items-center mb-6">
+					<h2 className="text-2xl font-semibold">
+						Daily Schedule & Tasks
+					</h2>
+					<div className="text-sm text-muted-foreground">
+						Double-click any task to edit • Hover to see edit button
+					</div>
+				</div>
 				<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 					<TaskList
 						tasks={tasks}
@@ -218,6 +245,7 @@ function DashboardContent() {
 							isTaskCompleted(taskId, currentDate)
 						}
 						onTaskToggle={handleTaskToggle}
+						onTaskEdit={handleTaskEdit}
 					/>
 					<TaskList
 						tasks={tasks}
@@ -226,6 +254,7 @@ function DashboardContent() {
 							isTaskCompleted(taskId, currentDate)
 						}
 						onTaskToggle={handleTaskToggle}
+						onTaskEdit={handleTaskEdit}
 					/>
 					<TaskList
 						tasks={tasks}
@@ -234,6 +263,7 @@ function DashboardContent() {
 							isTaskCompleted(taskId, currentDate)
 						}
 						onTaskToggle={handleTaskToggle}
+						onTaskEdit={handleTaskEdit}
 					/>
 				</div>
 			</section>

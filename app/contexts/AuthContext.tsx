@@ -42,6 +42,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		const {
 			data: { subscription },
 		} = AuthService.onAuthStateChange((user) => {
+			console.log(
+				"Auth state changed:",
+				user ? "User logged in" : "User logged out"
+			);
 			setUser(user);
 			setLoading(false);
 		});
@@ -50,11 +54,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 	}, []);
 
 	const signIn = async (email: string, password: string) => {
+		console.log("AuthContext: Starting signIn process");
 		setLoading(true);
+
 		try {
-			await AuthService.signIn({ email, password });
-		} catch (error) {
+			console.log("AuthContext: Calling AuthService.signIn");
+			const result = await AuthService.signIn({ email, password });
+			console.log("AuthContext: signIn completed successfully", result);
+
+			// Don't set loading to false here - let the auth state change handle it
+		} catch (error: any) {
+			console.error("AuthContext: signIn failed with error:", error);
+			console.error("AuthContext: Error message:", error.message);
+
+			// Make sure loading is set to false on error
 			setLoading(false);
+
+			// Re-throw the error so the component can catch it
 			throw error;
 		}
 	};
@@ -64,10 +80,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		password: string,
 		fullName: string
 	) => {
+		console.log("AuthContext: Starting signUp process");
 		setLoading(true);
+
 		try {
-			await AuthService.signUp({ email, password, fullName });
-		} catch (error) {
+			console.log("AuthContext: Calling AuthService.signUp");
+			const result = await AuthService.signUp({
+				email,
+				password,
+				fullName,
+			});
+			console.log("AuthContext: signUp completed successfully", result);
+
+			// For signup, we might not get an immediate auth state change
+			// if email verification is required, so set loading to false
+			setLoading(false);
+		} catch (error: any) {
+			console.error("AuthContext: signUp failed with error:", error);
+			console.error("AuthContext: Error message:", error.message);
+
 			setLoading(false);
 			throw error;
 		}
@@ -84,7 +115,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 	};
 
 	const resetPassword = async (email: string) => {
-		await AuthService.resetPassword(email);
+		try {
+			await AuthService.resetPassword(email);
+		} catch (error) {
+			throw error;
+		}
 	};
 
 	const value = {

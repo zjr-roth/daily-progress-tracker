@@ -1,4 +1,3 @@
-// lib/dailyDataService.ts
 import { supabase } from './supabase'
 import { DayProgress, ProgressData } from './types'
 
@@ -22,7 +21,8 @@ export class DailyDataService {
 
       return {
         completionPercentage: data.completion_percentage,
-        incompleteTasks: data.incomplete_tasks || []
+        incompleteTasks: data.incomplete_tasks || [],
+        incompleteTaskIds: data.incomplete_task_ids || []
       }
     } catch (error) {
       console.error('Error fetching daily progress:', error)
@@ -34,7 +34,7 @@ export class DailyDataService {
     try {
       const { data, error } = await supabase
         .from('daily_data')
-        .select('date, completion_percentage, incomplete_tasks')
+        .select('date, completion_percentage, incomplete_tasks, incomplete_task_ids')
         .eq('user_id', userId)
         .order('date', { ascending: true })
 
@@ -46,7 +46,8 @@ export class DailyDataService {
         data.forEach((item) => {
           progressData[item.date] = {
             completionPercentage: item.completion_percentage,
-            incompleteTasks: item.incomplete_tasks || []
+            incompleteTasks: item.incomplete_tasks || [],
+            incompleteTaskIds: item.incomplete_task_ids || []
           }
         })
       }
@@ -62,18 +63,26 @@ export class DailyDataService {
     userId: string,
     date: string,
     incompleteTasks: string[],
-    completionPercentage: number
+    completionPercentage: number,
+    incompleteTaskIds?: string[]
   ): Promise<void> {
     try {
+      const updateData: any = {
+        user_id: userId,
+        date: date,
+        incomplete_tasks: incompleteTasks,
+        completion_percentage: completionPercentage,
+        updated_at: new Date().toISOString()
+      }
+
+      // Add incomplete_task_ids if provided
+      if (incompleteTaskIds !== undefined) {
+        updateData.incomplete_task_ids = incompleteTaskIds
+      }
+
       const { error } = await supabase
         .from('daily_data')
-        .upsert({
-          user_id: userId,
-          date: date,
-          incomplete_tasks: incompleteTasks,
-          completion_percentage: completionPercentage,
-          updated_at: new Date().toISOString()
-        }, {
+        .upsert(updateData, {
           onConflict: 'user_id,date'
         })
 
@@ -87,21 +96,29 @@ export class DailyDataService {
   static async createDailyEntry(
     userId: string,
     date: string,
-    incompleteTasks: string[]
+    incompleteTasks: string[],
+    incompleteTaskIds?: string[]
   ): Promise<void> {
     try {
+      const insertData: any = {
+        user_id: userId,
+        date: date,
+        incomplete_tasks: incompleteTasks,
+        completion_percentage: 0,
+        tasks: [],
+        schedule_items: [],
+        progress_metrics: {},
+        completion_status: {}
+      }
+
+      // Add incomplete_task_ids if provided
+      if (incompleteTaskIds !== undefined) {
+        insertData.incomplete_task_ids = incompleteTaskIds
+      }
+
       const { error } = await supabase
         .from('daily_data')
-        .insert({
-          user_id: userId,
-          date: date,
-          incomplete_tasks: incompleteTasks,
-          completion_percentage: 0,
-          tasks: [],
-          schedule_items: [],
-          progress_metrics: {},
-          completion_status: {}
-        })
+        .insert(insertData)
 
       if (error && error.code !== '23505') { // Ignore unique constraint violation
         throw error
