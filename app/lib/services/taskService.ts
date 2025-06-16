@@ -1,4 +1,4 @@
-// app/lib/services/taskService.ts - Fixed version
+// app/lib/services/taskService.ts - Fixed version with proper task deletion
 import { supabase } from '../supabase';
 import { Task, TimeBlock } from '../types';
 
@@ -74,7 +74,7 @@ export class TaskService {
 
       if (error) throw error;
 
-      return data?.map(this.transformDatabaseTaskToTask) || [];
+      return data?.map(TaskService.transformDatabaseTaskToTask) || [];
     } catch (error) {
       console.error('Error fetching user tasks:', error);
       throw error;
@@ -91,19 +91,19 @@ export class TaskService {
   ): Promise<Task> {
     try {
       // First check if time slot is available using basic validation
-      const timeStart = this.extractTimeFromTimeString(taskData.time);
-      const timeEnd = this.addMinutesToTime(timeStart, taskData.duration);
+      const timeStart = TaskService.extractTimeFromTimeString(taskData.time);
+      const timeEnd = TaskService.addMinutesToTime(timeStart, taskData.duration);
 
       // Basic conflict check with existing tasks
       const existingTasks = await this.getUserTasks(userId, taskData.scheduledDate);
-      const hasConflict = this.checkBasicTimeConflict(existingTasks, taskData.time);
+      const hasConflict = TaskService.checkBasicTimeConflict(existingTasks, taskData.time);
 
       if (hasConflict) {
         throw new Error('Time slot conflicts with an existing task. Please choose a different time.');
       }
 
       // Get next position for the time block
-      const position = await this.getNextPositionForTimeBlock(
+      const position = await TaskService.getNextPositionForTimeBlock(
         userId,
         taskData.block,
         taskData.scheduledDate
@@ -149,7 +149,7 @@ export class TaskService {
         throw new Error(`Failed to create task: ${error.message}`);
       }
 
-      return this.transformDatabaseTaskToTask(data);
+      return TaskService.transformDatabaseTaskToTask(data);
     } catch (error) {
       console.error('Error creating task:', error);
       throw error;
@@ -171,8 +171,8 @@ export class TaskService {
       if (updates.duration) updateData.duration = updates.duration;
 
       if (updates.time) {
-        updateData.time_start = this.extractTimeFromTimeString(updates.time);
-        updateData.time_end = this.addMinutesToTime(
+        updateData.time_start = TaskService.extractTimeFromTimeString(updates.time);
+        updateData.time_end = TaskService.addMinutesToTime(
           updateData.time_start,
           updates.duration || 0
         );
@@ -197,8 +197,8 @@ export class TaskService {
           .single();
 
         if (taskData) {
-          const existingTasks = await this.getUserTasks(taskData.user_id);
-          const hasConflict = this.checkBasicTimeConflict(
+          const existingTasks = await TaskService.getUserTasks(taskData.user_id);
+          const hasConflict = TaskService.checkBasicTimeConflict(
             existingTasks,
             updates.time!,
             taskId
@@ -231,27 +231,118 @@ export class TaskService {
         throw new Error(`Failed to update task: ${error.message}`);
       }
 
-      return this.transformDatabaseTaskToTask(data);
+      return TaskService.transformDatabaseTaskToTask(data);
     } catch (error) {
       console.error('Error updating task:', error);
       throw error;
     }
   }
 
+  // FIXED: Actually delete tasks from database instead of just marking as inactive
   static async deleteTask(taskId: string): Promise<void> {
     try {
+      // Get the task details before deletion for cleanup
+      const { data: taskToDelete, error: fetchError } = await supabase
+        .from('tasks')
+        .select('user_id, name')
+        .eq('id', taskId)
+        .single();
+
+      if (fetchError) {
+        console.error('Error fetching task to delete:', fetchError);
+        throw new Error(`Failed to fetch task for deletion: ${fetchError.message}`);
+      }
+
+      // Step 1: Remove the task from any daily progress data
+      if (taskToDelete) {
+        await TaskService.cleanupTaskFromProgressData(taskId, taskToDelete.name);
+      }
+
+      // Step 2: Actually DELETE the task from the database
       const { error } = await supabase
         .from('tasks')
-        .update({ is_active: false })
+        .delete()  // Changed from update to delete
         .eq('id', taskId);
 
       if (error) {
         console.error('Database error:', error);
         throw new Error(`Failed to delete task: ${error.message}`);
       }
+
+      console.log(`Task ${taskId} successfully deleted from database`);
     } catch (error) {
       console.error('Error deleting task:', error);
       throw error;
+    }
+  }
+
+  // NEW: Clean up task references from daily progress data
+  static async cleanupTaskFromProgressData(taskId: string, taskName: string): Promise<void> {
+    try {
+      // Get all daily data entries that might reference this task
+      const { data: dailyDataEntries, error: fetchError } = await supabase
+        .from('daily_data')
+        .select('id, incomplete_task_ids, incomplete_tasks, completion_percentage')
+        .or(`incomplete_task_ids.cs.{${taskId}},incomplete_tasks.cs.{${taskName}}`);
+
+      if (fetchError) {
+        console.warn('Error fetching daily data for cleanup:', fetchError);
+        return; // Don't throw, just log and continue
+      }
+
+      if (!dailyDataEntries || dailyDataEntries.length === 0) {
+        console.log('No daily data entries found containing this task');
+        return;
+      }
+
+      // Update each entry to remove references to the deleted task
+      for (const entry of dailyDataEntries) {
+        const updates: any = {};
+        let needsUpdate = false;
+
+        // Clean up incomplete_task_ids array
+        if (entry.incomplete_task_ids && Array.isArray(entry.incomplete_task_ids)) {
+          const cleanedTaskIds = entry.incomplete_task_ids.filter((id: string) => id !== taskId);
+          if (cleanedTaskIds.length !== entry.incomplete_task_ids.length) {
+            updates.incomplete_task_ids = cleanedTaskIds;
+            needsUpdate = true;
+          }
+        }
+
+        // Clean up incomplete_tasks array (for backward compatibility)
+        if (entry.incomplete_tasks && Array.isArray(entry.incomplete_tasks)) {
+          const cleanedTasks = entry.incomplete_tasks.filter((name: string) => name !== taskName);
+          if (cleanedTasks.length !== entry.incomplete_tasks.length) {
+            updates.incomplete_tasks = cleanedTasks;
+            needsUpdate = true;
+          }
+        }
+
+        // If we removed any tasks, we might need to recalculate completion percentage
+        // Note: This is a simplified recalculation. In a real scenario, you'd want to
+        // get the current total task count for that day to calculate the proper percentage
+        if (needsUpdate) {
+          // For now, we'll leave the completion percentage as is, since we don't have
+          // the total task count for that specific day readily available here
+          updates.updated_at = new Date().toISOString();
+
+          const { error: updateError } = await supabase
+            .from('daily_data')
+            .update(updates)
+            .eq('id', entry.id);
+
+          if (updateError) {
+            console.error(`Error updating daily data entry ${entry.id}:`, updateError);
+          } else {
+            console.log(`Cleaned up daily data entry ${entry.id}`);
+          }
+        }
+      }
+
+      console.log(`Completed cleanup for task ${taskId} (${taskName})`);
+    } catch (error) {
+      console.error('Error cleaning up task from progress data:', error);
+      // Don't throw here - we want task deletion to succeed even if cleanup fails
     }
   }
 
@@ -299,14 +390,14 @@ export class TaskService {
       if (error) {
         console.warn('Enhanced time slots function not available, using basic fallback');
         // Fallback to basic implementation
-        return this.getBasicAvailableTimeSlots(userId, date, minDuration);
+        return TaskService.getBasicAvailableTimeSlots(userId, date, minDuration);
       }
 
       return data || [];
     } catch (error) {
       console.error('Error getting available time slots:', error);
       // Return basic fallback
-      return this.getBasicAvailableTimeSlots(userId, date, minDuration);
+      return TaskService.getBasicAvailableTimeSlots(userId, date, minDuration);
     }
   }
 
@@ -317,7 +408,7 @@ export class TaskService {
     minDuration: number = 15
   ): Promise<FormattedTimeSlot[]> {
     try {
-      const tasks = await this.getUserTasks(userId, date);
+      const tasks = await TaskService.getUserTasks(userId, date);
       const timeBlocks = ['morning', 'afternoon', 'evening'] as const;
       const slots: FormattedTimeSlot[] = [];
 
@@ -355,12 +446,12 @@ export class TaskService {
     excludeTaskId?: string
   ): boolean {
     try {
-      const newTaskTimeRange = this.parseTimeString(newTaskTime);
+      const newTaskTimeRange = TaskService.parseTimeString(newTaskTime);
 
       for (const task of existingTasks) {
         if (excludeTaskId && task.id === excludeTaskId) continue;
 
-        const taskTimeRange = this.parseTimeString(task.time);
+        const taskTimeRange = TaskService.parseTimeString(task.time);
 
         // Check for overlap
         if (
@@ -380,14 +471,15 @@ export class TaskService {
 
   // Helper to parse time string
   static parseTimeString(timeString: string): { start: Date; end: Date } {
-    const timePattern = /(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*(AM|PM)/i;
+    // Updated regex to handle formats like "8:00 AM-9:00 AM", "8:00-9:00 AM", "2:30 PM-3:45 PM"
+    const timePattern = /(\d{1,2}):(\d{2})\s*(AM|PM)?\s*-\s*(\d{1,2}):(\d{2})\s*(AM|PM)/i;
     const match = timeString.match(timePattern);
 
     if (!match) {
       throw new Error(`Invalid time format: ${timeString}`);
     }
 
-    const [, startHour, startMin, endHour, endMin, period] = match;
+    const [, startHour, startMin, startPeriod, endHour, endMin, endPeriod] = match;
 
     const start = new Date();
     const end = new Date();
@@ -395,15 +487,18 @@ export class TaskService {
     let startHour24 = parseInt(startHour);
     let endHour24 = parseInt(endHour);
 
-    if (period.toUpperCase() === 'PM' && startHour24 !== 12) {
+    // Handle start time period (use end period if start period is missing)
+    const actualStartPeriod = startPeriod || endPeriod;
+    if (actualStartPeriod?.toUpperCase() === 'PM' && startHour24 !== 12) {
       startHour24 += 12;
-    } else if (period.toUpperCase() === 'AM' && startHour24 === 12) {
+    } else if (actualStartPeriod?.toUpperCase() === 'AM' && startHour24 === 12) {
       startHour24 = 0;
     }
 
-    if (period.toUpperCase() === 'PM' && endHour24 !== 12) {
+    // Handle end time period
+    if (endPeriod?.toUpperCase() === 'PM' && endHour24 !== 12) {
       endHour24 += 12;
-    } else if (period.toUpperCase() === 'AM' && endHour24 === 12) {
+    } else if (endPeriod?.toUpperCase() === 'AM' && endHour24 === 12) {
       endHour24 = 0;
     }
 
@@ -433,9 +528,9 @@ export class TaskService {
       if (error) {
         console.warn('Enhanced availability check not available, using basic fallback');
         // Fallback to basic check
-        const tasks = await this.getUserTasks(userId, date);
-        const timeString = this.formatTimeRange(startTime, endTime);
-        return !this.checkBasicTimeConflict(tasks, timeString, excludeTaskId);
+        const tasks = await TaskService.getUserTasks(userId, date);
+        const timeString = TaskService.formatTimeRange(startTime, endTime);
+        return !TaskService.checkBasicTimeConflict(tasks, timeString, excludeTaskId);
       }
 
       return data || false;
@@ -456,7 +551,7 @@ export class TaskService {
     alternatives: FormattedTimeSlot[];
   }> {
     try {
-      const allSlots = await this.getAvailableTimeSlots(userId, date, taskDuration);
+      const allSlots = await TaskService.getAvailableTimeSlots(userId, date, taskDuration);
 
       let recommended = allSlots.filter(slot => slot.recommended);
       let alternatives = allSlots.filter(slot => !slot.recommended);
@@ -500,8 +595,8 @@ export class TaskService {
     suggestions: string[];
   }> {
     try {
-      const tasks = await this.getUserTasks(userId, date);
-      const availableSlots = await this.getAvailableTimeSlots(userId, date);
+      const tasks = await TaskService.getUserTasks(userId, date);
+      const availableSlots = await TaskService.getAvailableTimeSlots(userId, date);
 
       const totalScheduledTime = tasks.reduce((sum, task) => sum + task.duration, 0);
 
@@ -510,7 +605,7 @@ export class TaskService {
       let largestFreeBlock = 0;
 
       availableSlots.forEach(slot => {
-        const duration = this.parseDurationString(slot.duration);
+        const duration = TaskService.parseDurationString(slot.duration);
         totalFreeTime += duration;
         largestFreeBlock = Math.max(largestFreeBlock, duration);
       });
@@ -575,7 +670,7 @@ export class TaskService {
   }
 
   // Helper methods
-  private static parseDurationString(duration: string): number {
+  static parseDurationString(duration: string): number {
     // Parse duration strings like "2h 30m", "90 minutes", etc.
     const hoursMatch = duration.match(/(\d+)h/);
     const minutesMatch = duration.match(/(\d+)\s*m/);
@@ -593,18 +688,18 @@ export class TaskService {
     return totalMinutes;
   }
 
-  private static transformDatabaseTaskToTask(dbTask: DatabaseTask): Task {
+  static transformDatabaseTaskToTask(dbTask: DatabaseTask): Task {
     return {
       id: dbTask.id,
       name: dbTask.name,
-      time: this.formatTimeRange(dbTask.time_start, dbTask.time_end),
+      time: TaskService.formatTimeRange(dbTask.time_start, dbTask.time_end),
       category: dbTask.categories?.name || 'Personal',
       duration: dbTask.duration,
       block: dbTask.time_block,
     };
   }
 
-  private static extractTimeFromTimeString(timeString: string): string {
+  static extractTimeFromTimeString(timeString: string): string {
     const timeMatch = timeString.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
     if (!timeMatch) {
       throw new Error('Invalid time format');
@@ -624,7 +719,7 @@ export class TaskService {
     return `${hour24.toString().padStart(2, '0')}:${minutes}:00`;
   }
 
-  private static addMinutesToTime(timeString: string, minutes: number): string {
+  static addMinutesToTime(timeString: string, minutes: number): string {
     const [hours, mins] = timeString.split(':').map(Number);
     const totalMinutes = hours * 60 + mins + minutes;
     const newHours = Math.floor(totalMinutes / 60) % 24;
@@ -632,7 +727,7 @@ export class TaskService {
     return `${newHours.toString().padStart(2, '0')}:${newMins.toString().padStart(2, '0')}:00`;
   }
 
-  private static formatTimeRange(startTime: string, endTime: string): string {
+  static formatTimeRange(startTime: string, endTime: string): string {
     const formatTime = (time: string) => {
       const [hours, minutes] = time.split(':').map(Number);
       const period = hours >= 12 ? 'PM' : 'AM';
@@ -643,7 +738,7 @@ export class TaskService {
     return `${formatTime(startTime)}-${formatTime(endTime)}`;
   }
 
-  private static async getNextPositionForTimeBlock(
+  static async getNextPositionForTimeBlock(
     userId: string,
     timeBlock: TimeBlock,
     scheduledDate?: string

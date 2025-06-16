@@ -1,9 +1,9 @@
-// app/hooks/useProgressData.ts - Updated to work with dynamic tasks
+// app/hooks/useProgressData.ts - Enhanced to handle proper task deletion
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { ProgressData, DayProgress, Task } from '../lib/types';
 import { formatDate } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
-import { DailyDataService } from '../lib/dailyDataService';
+import { DailyDataService } from '../lib/services/dailyDataService';
 
 export function useProgressData(tasks: Task[]) {
   const { user } = useAuth();
@@ -26,6 +26,13 @@ export function useProgressData(tasks: Task[]) {
     }
   }, [user?.id]);
 
+  // Recalculate progress when tasks change (handles task additions/deletions)
+  useEffect(() => {
+    if (user?.id && tasks.length >= 0 && currentDate) {
+      recalculateProgressForCurrentTasks();
+    }
+  }, [user?.id, tasks, currentDate]);
+
   const loadProgressData = useCallback(async () => {
     if (!user?.id) return;
 
@@ -42,6 +49,64 @@ export function useProgressData(tasks: Task[]) {
     }
   }, [user?.id]);
 
+  // NEW: Recalculate progress to match current tasks
+  const recalculateProgressForCurrentTasks = useCallback(async () => {
+    if (!user?.id || !currentDate || tasks.length < 0) return;
+
+    try {
+      const currentProgress = progressData[currentDate];
+      if (!currentProgress) return;
+
+      // Get current task IDs
+      const currentTaskIds = tasks.map(t => t.id);
+      const currentTaskNames = tasks.map(t => t.name);
+
+      // Clean up incomplete task IDs to only include existing tasks
+      const existingIncompleteTaskIds = (currentProgress.incompleteTaskIds || [])
+        .filter(id => currentTaskIds.includes(id));
+
+      // Clean up incomplete task names to only include existing tasks
+      const existingIncompleteTasks = (currentProgress.incompleteTasks || [])
+        .filter(name => currentTaskNames.includes(name));
+
+      // Check if we need to update the progress data
+      const needsUpdate =
+        existingIncompleteTaskIds.length !== (currentProgress.incompleteTaskIds || []).length ||
+        existingIncompleteTasks.length !== (currentProgress.incompleteTasks || []).length;
+
+      if (needsUpdate) {
+        // Recalculate completion percentage
+        const totalTasks = tasks.length;
+        const completedTasks = totalTasks - existingIncompleteTaskIds.length;
+        const completionPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 100;
+
+        // Update local state
+        setProgressData(prevData => ({
+          ...prevData,
+          [currentDate]: {
+            ...currentProgress,
+            completionPercentage,
+            incompleteTaskIds: existingIncompleteTaskIds,
+            incompleteTasks: existingIncompleteTasks
+          }
+        }));
+
+        // Update database
+        await DailyDataService.updateTaskCompletion(
+          user.id,
+          currentDate,
+          existingIncompleteTasks,
+          completionPercentage,
+          existingIncompleteTaskIds
+        );
+
+        console.log(`Recalculated progress for ${currentDate}: ${completionPercentage}% (${completedTasks}/${totalTasks} tasks)`);
+      }
+    } catch (error) {
+      console.error('Error recalculating progress:', error);
+    }
+  }, [user?.id, currentDate, progressData, tasks]);
+
   const isTaskCompleted = useCallback((taskId: string, date: string): boolean => {
     if (!progressData[date]) {
       return false;
@@ -56,7 +121,10 @@ export function useProgressData(tasks: Task[]) {
     if (!user?.id || tasks.length === 0) return;
 
     const task = tasks.find(t => t.id === taskId);
-    if (!task) return;
+    if (!task) {
+      console.warn(`Task with ID ${taskId} not found in current tasks`);
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -104,7 +172,7 @@ export function useProgressData(tasks: Task[]) {
         // Update completion percentage based on current tasks
         const totalTasks = tasks.length;
         const completedTasks = totalTasks - incompleteTaskIds.length;
-        dateData.completionPercentage = Math.round((completedTasks / totalTasks) * 100);
+        dateData.completionPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 100;
         dateData.incompleteTaskIds = incompleteTaskIds;
         dateData.incompleteTasks = incompleteTasks; // Keep for backward compatibility
 
@@ -142,7 +210,7 @@ export function useProgressData(tasks: Task[]) {
 
       const totalTasks = tasks.length;
       const completedTasks = totalTasks - incompleteTaskIds.length;
-      const completionPercentage = Math.round((completedTasks / totalTasks) * 100);
+      const completionPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 100;
 
       // Update database
       await DailyDataService.updateTaskCompletion(
@@ -170,7 +238,30 @@ export function useProgressData(tasks: Task[]) {
       incompleteTaskIds: tasks.map(t => t.id)
     };
 
-    return progressData[date] || defaultProgress;
+    const existingProgress = progressData[date];
+    if (!existingProgress) return defaultProgress;
+
+    // Ensure the progress data matches current tasks
+    const currentTaskIds = tasks.map(t => t.id);
+    const currentTaskNames = tasks.map(t => t.name);
+
+    // Filter out any references to tasks that no longer exist
+    const validIncompleteTaskIds = (existingProgress.incompleteTaskIds || [])
+      .filter(id => currentTaskIds.includes(id));
+
+    const validIncompleteTasks = (existingProgress.incompleteTasks || [])
+      .filter(name => currentTaskNames.includes(name));
+
+    // If the counts don't match, we need to recalculate
+    const totalTasks = tasks.length;
+    const completedTasks = totalTasks - validIncompleteTaskIds.length;
+    const recalculatedPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 100;
+
+    return {
+      completionPercentage: recalculatedPercentage,
+      incompleteTasks: validIncompleteTasks,
+      incompleteTaskIds: validIncompleteTaskIds
+    };
   }, [progressData, tasks]);
 
   const goToToday = useCallback(() => {

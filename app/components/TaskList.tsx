@@ -68,14 +68,6 @@ export function TaskList({
 			return parseTime(aTime) - parseTime(bTime);
 		});
 
-	const completedCount = blockTasks.filter((task) =>
-		isTaskCompleted(task.id)
-	).length;
-	const completionPercentage =
-		blockTasks.length > 0
-			? Math.round((completedCount / blockTasks.length) * 100)
-			: 0;
-
 	return (
 		<Card className={cn("border-l-4 group h-fit", blockColors[timeBlock])}>
 			<CardHeader className="pb-4">
@@ -102,27 +94,6 @@ export function TaskList({
 						</Button>
 					)}
 				</div>
-
-				{blockTasks.length > 0 && (
-					<div className="flex items-center gap-2 pt-2">
-						<div className="flex-1 bg-secondary rounded-full h-2">
-							<div
-								className={cn(
-									"h-2 rounded-full transition-all duration-300",
-									completionPercentage === 100
-										? "bg-green-500"
-										: completionPercentage >= 50
-										? "bg-blue-500"
-										: "bg-yellow-500"
-								)}
-								style={{ width: `${completionPercentage}%` }}
-							/>
-						</div>
-						<span className="text-xs text-muted-foreground">
-							{completedCount}/{blockTasks.length}
-						</span>
-					</div>
-				)}
 			</CardHeader>
 			<CardContent>
 				<div className="space-y-2">

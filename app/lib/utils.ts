@@ -1,4 +1,4 @@
-// app/lib/utils.ts - Enhanced for database integration
+// app/lib/utils.ts - Fixed time parsing and validation
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { ProgressData, Task, CategoryStats, StreakData, DayProgress } from './types';
@@ -137,17 +137,17 @@ export function exportToCSV(progressData: ProgressData, tasks: Task[]): void {
   window.URL.revokeObjectURL(url);
 }
 
-// Enhanced time management functions using database integration
+// Fixed time parsing function that handles multiple formats
 export function parseTimeString(timeString: string): { start: Date, end: Date } {
-  // Parse time strings like "9:00-10:00 AM" or "2:30-3:45 PM"
-  const timePattern = /(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*(AM|PM)/i;
+  // Parse time strings like "9:00-10:00 AM", "9:00 AM-10:00 AM", or "8:00 AM-9:00 AM"
+  const timePattern = /(\d{1,2}):(\d{2})\s*(AM|PM)?\s*-\s*(\d{1,2}):(\d{2})\s*(AM|PM)/i;
   const match = timeString.match(timePattern);
 
   if (!match) {
-    throw new Error(`Invalid time format: ${timeString}`);
+    throw new Error(`Invalid time format: ${timeString}. Expected format: "8:00 AM-9:00 AM" or "8:00-9:00 AM"`);
   }
 
-  const [, startHour, startMin, endHour, endMin, period] = match;
+  const [, startHour, startMin, startPeriod, endHour, endMin, endPeriod] = match;
 
   const start = new Date();
   const end = new Date();
@@ -155,15 +155,21 @@ export function parseTimeString(timeString: string): { start: Date, end: Date } 
   let startHour24 = parseInt(startHour);
   let endHour24 = parseInt(endHour);
 
-  if (period.toUpperCase() === 'PM' && startHour24 !== 12) {
+  // Use end period if start period is not provided
+  const actualStartPeriod = startPeriod || endPeriod;
+  const actualEndPeriod = endPeriod;
+
+  // Convert start time to 24-hour format
+  if (actualStartPeriod.toUpperCase() === 'PM' && startHour24 !== 12) {
     startHour24 += 12;
-  } else if (period.toUpperCase() === 'AM' && startHour24 === 12) {
+  } else if (actualStartPeriod.toUpperCase() === 'AM' && startHour24 === 12) {
     startHour24 = 0;
   }
 
-  if (period.toUpperCase() === 'PM' && endHour24 !== 12) {
+  // Convert end time to 24-hour format
+  if (actualEndPeriod.toUpperCase() === 'PM' && endHour24 !== 12) {
     endHour24 += 12;
-  } else if (period.toUpperCase() === 'AM' && endHour24 === 12) {
+  } else if (actualEndPeriod.toUpperCase() === 'AM' && endHour24 === 12) {
     endHour24 = 0;
   }
 
@@ -499,7 +505,7 @@ export function validateTaskTime(
   } catch (error) {
     return {
       isValid: false,
-      error: `Invalid time format: ${timeString}`
+      error: `Invalid time format: ${timeString}. Expected format: "8:00 AM-9:00 AM"`
     };
   }
 }

@@ -48,7 +48,6 @@ const randomGreeting = [
 	"Good to see you",
 	"Let's level up",
 	"Let's get it",
-	"Ready to seize the day",
 ];
 
 // Get consistent daily greeting based on current date
@@ -485,16 +484,6 @@ function DashboardContent() {
 										see edit button
 									</div>
 									<div className="flex gap-2">
-										{/* <Button
-											variant="outline"
-											size="sm"
-											onClick={() =>
-												setShowSmartAssistant(true)
-											}
-										>
-											<Brain className="h-4 w-4 mr-2" />
-											Smart Assistant
-										</Button> */}
 										<Button
 											variant="outline"
 											size="sm"
