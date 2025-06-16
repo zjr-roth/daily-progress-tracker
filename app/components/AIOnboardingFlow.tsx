@@ -1,4 +1,4 @@
-// app/components/AIOnboardingFlow.tsx - Enhanced with real AI integration
+// app/components/AIOnboardingFlow.tsx - FIXED VERSION
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
@@ -74,6 +74,7 @@ export function AIOnboardingFlow({
 		scientificBacking: string[];
 	} | null>(null);
 	const [isResearching, setIsResearching] = useState(false);
+	const [hasInitialized, setHasInitialized] = useState(false);
 	const messagesEndRef = useRef<HTMLDivElement>(null);
 
 	const onboardingSteps: OnboardingStep[] = [
@@ -136,8 +137,24 @@ export function AIOnboardingFlow({
 		],
 	};
 
+	// FIXED: Prevent duplicate initialization and messages
 	useEffect(() => {
-		// Initialize conversation based on mode
+		if (!hasInitialized) {
+			setHasInitialized(true);
+			initializeConversation();
+		}
+	}, [hasInitialized, userName, mode]);
+
+	useEffect(() => {
+		scrollToBottom();
+	}, [messages]);
+
+	const scrollToBottom = () => {
+		messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+	};
+
+	// FIXED: Separate initialization function to prevent duplicate messages
+	const initializeConversation = () => {
 		if (mode === "onboarding") {
 			addMessage({
 				type: "ai",
@@ -156,14 +173,6 @@ export function AIOnboardingFlow({
 				],
 			});
 		}
-	}, [userName, mode]);
-
-	useEffect(() => {
-		scrollToBottom();
-	}, [messages]);
-
-	const scrollToBottom = () => {
-		messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
 	};
 
 	const addMessage = (message: Omit<Message, "id" | "timestamp">) => {
@@ -282,6 +291,7 @@ export function AIOnboardingFlow({
 		}
 	};
 
+	// FIXED: Accept goals as string and handle API failures gracefully
 	const performGoalResearch = async (goals: string) => {
 		setIsResearching(true);
 		try {
@@ -291,7 +301,7 @@ export function AIOnboardingFlow({
 					"Content-Type": "application/json",
 				},
 				body: JSON.stringify({
-					goals: goals.split(",").map((g) => g.trim()),
+					goals: goals, // FIXED: Send as string, not array
 				}),
 			});
 
@@ -299,7 +309,14 @@ export function AIOnboardingFlow({
 				throw new Error("Research request failed");
 			}
 
-			const { data } = await response.json();
+			const result = await response.json();
+
+			// FIXED: Handle both success and error responses properly
+			if (!result.success) {
+				throw new Error(result.error || "Research request failed");
+			}
+
+			const data = result.data;
 			setResearchResults(data);
 
 			// Create insights message
@@ -334,9 +351,11 @@ export function AIOnboardingFlow({
 			}
 		} catch (error) {
 			console.error("Research failed:", error);
+
+			// FIXED: Provide helpful fallback message instead of error
 			addMessage({
 				type: "ai",
-				content: `I encountered an issue while researching. Let me continue with general best practices for your goals.`,
+				content: `I'll continue with general best practices for your goals. Based on productivity research, here are some key principles:\n\n🧠 **Core Strategies:**\n• Schedule demanding tasks during your peak energy hours\n• Use time-blocking to create structure and reduce decision fatigue\n• Include regular breaks to maintain cognitive performance\n\n📊 **Recommended Allocations:**\n• Deep work: 2-3 hour blocks\n• Learning: 60-90 minute sessions\n• Breaks: 15-20 minutes every 90 minutes`,
 			});
 
 			if (mode === "onboarding") {
@@ -376,7 +395,13 @@ export function AIOnboardingFlow({
 				throw new Error("Optimization request failed");
 			}
 
-			const { data } = await response.json();
+			const result = await response.json();
+
+			if (!result.success) {
+				throw new Error(result.error || "Optimization failed");
+			}
+
+			const data = result.data;
 
 			const optimizationContent = [
 				"🎯 **Schedule Optimization Results:**",
@@ -403,7 +428,7 @@ export function AIOnboardingFlow({
 			console.error("Optimization failed:", error);
 			addMessage({
 				type: "ai",
-				content: `I encountered an issue while optimizing your schedule. Here are some general recommendations:\n\n• Consider moving demanding tasks to your peak energy hours\n• Ensure adequate breaks between intensive activities\n• Group similar tasks together to minimize context switching`,
+				content: `Here are some general optimization recommendations for your schedule:\n\n• Consider moving demanding tasks to your peak energy hours\n• Ensure adequate breaks between intensive activities\n• Group similar tasks together to minimize context switching\n• Review your current task distribution across morning, afternoon, and evening blocks`,
 			});
 		} finally {
 			setIsGenerating(false);
@@ -434,7 +459,13 @@ export function AIOnboardingFlow({
 				throw new Error("Schedule generation failed");
 			}
 
-			const { data } = await response.json();
+			const result = await response.json();
+
+			if (!result.success) {
+				throw new Error(result.error || "Schedule generation failed");
+			}
+
+			const data = result.data;
 
 			// Transform the AI response to match our Task interface
 			const transformedTasks: Task[] = data.tasks.map(
@@ -458,7 +489,7 @@ export function AIOnboardingFlow({
 
 			addMessage({
 				type: "ai",
-				content: `🎉 Your personalized schedule is ready! I've created a balanced daily routine based on your preferences and the latest productivity research:\n\n✅ Optimized for your productive hours and constraints\n✅ Incorporates research-backed practices for your goals\n✅ Includes your preferred work style and timing\n✅ Balances work, personal time, and breaks\n\nYou can review the full schedule below. Would you like to use this schedule?`,
+				content: `🎉 Your personalized schedule is ready! I've created a balanced daily routine based on your preferences and productivity research:\n\n✅ Optimized for your productive hours and constraints\n✅ Incorporates research-backed practices for your goals\n✅ Includes your preferred work style and timing\n✅ Balances work, personal time, and breaks\n\nYou can review the full schedule below. Would you like to use this schedule?`,
 			});
 		} catch (error) {
 			console.error("Schedule generation failed:", error);
@@ -468,7 +499,7 @@ export function AIOnboardingFlow({
 
 			addMessage({
 				type: "ai",
-				content: `I created a basic schedule based on your preferences. While I couldn't access the latest research due to a connectivity issue, this schedule follows proven productivity principles. You can customize it further once we're done here.`,
+				content: `I created a personalized schedule based on your preferences using proven productivity principles. While I couldn't access the latest research due to a connectivity issue, this schedule follows established best practices and can be customized further.`,
 			});
 		} finally {
 			setIsGenerating(false);
@@ -479,40 +510,65 @@ export function AIOnboardingFlow({
 		const profile = userProfile;
 		const baseTasks: Omit<Task, "id">[] = [];
 
+		// Parse wake time or default to 7 AM
+		const wakeTimeMatch = profile.wakeTime.match(/(\d{1,2})/);
+		const wakeHour = wakeTimeMatch ? parseInt(wakeTimeMatch[1]) : 7;
+		const adjustedWakeHour = Math.max(6, Math.min(10, wakeHour));
+
 		// Morning routine (always included)
 		baseTasks.push({
 			name: "Morning Routine & Planning",
-			time: "7:00-7:30 AM",
+			time: `${adjustedWakeHour}:00-${adjustedWakeHour}:30 AM`,
 			category: "Personal",
 			duration: 30,
 			block: "morning",
 		});
 
+		// Analyze constraints for work pattern
+		const constraints = profile.constraints.toLowerCase();
+		const goals = profile.goals.toLowerCase();
+
 		// Work/Study blocks based on constraints
-		if (
-			profile.constraints.toLowerCase().includes("9") &&
-			profile.constraints.toLowerCase().includes("5")
-		) {
+		if (constraints.includes("9") && constraints.includes("5")) {
 			baseTasks.push(
 				{
 					name: "Deep Work Session 1",
 					time: "9:00-11:00 AM",
-					category: "Study",
+					category: "Work",
 					duration: 120,
 					block: "morning",
 				},
 				{
-					name: "Communication & Email",
+					name: "Administrative Tasks & Email",
 					time: "11:00-11:30 AM",
 					category: "Work",
 					duration: 30,
 					block: "morning",
 				},
 				{
-					name: "Project Work",
+					name: "Project Work & Collaboration",
 					time: "1:00-3:00 PM",
 					category: "Work",
 					duration: 120,
+					block: "afternoon",
+				}
+			);
+		} else if (constraints.includes("student")) {
+			baseTasks.push(
+				{
+					name: "Primary Study Session",
+					time: `${adjustedWakeHour + 1}:00-${
+						adjustedWakeHour + 3
+					}:00 AM`,
+					category: "Study",
+					duration: 120,
+					block: "morning",
+				},
+				{
+					name: "Practice & Review",
+					time: "2:00-3:30 PM",
+					category: "Study",
+					duration: 90,
 					block: "afternoon",
 				}
 			);
@@ -536,10 +592,7 @@ export function AIOnboardingFlow({
 		}
 
 		// Add goal-based tasks
-		if (
-			profile.goals.toLowerCase().includes("health") ||
-			profile.goals.toLowerCase().includes("fitness")
-		) {
+		if (goals.includes("health") || goals.includes("fitness")) {
 			baseTasks.push({
 				name: "Exercise & Fitness",
 				time: "6:00-7:00 PM",
@@ -550,8 +603,9 @@ export function AIOnboardingFlow({
 		}
 
 		if (
-			profile.goals.toLowerCase().includes("learning") ||
-			profile.goals.toLowerCase().includes("development")
+			goals.includes("learning") ||
+			goals.includes("development") ||
+			goals.includes("skill")
 		) {
 			baseTasks.push({
 				name: "Skill Development",
@@ -562,8 +616,25 @@ export function AIOnboardingFlow({
 			});
 		}
 
+		if (
+			goals.includes("fintech") ||
+			goals.includes("entrepreneur") ||
+			goals.includes("business")
+		) {
+			baseTasks.push({
+				name: "Industry Research & Networking",
+				time: "4:00-5:30 PM",
+				category: "Research",
+				duration: 90,
+				block: "afternoon",
+			});
+		}
+
 		// Add break times based on work style
-		if (profile.workStyle.toLowerCase().includes("break")) {
+		if (
+			profile.workStyle.toLowerCase().includes("break") ||
+			profile.workStyle.toLowerCase().includes("short")
+		) {
 			baseTasks.push(
 				{
 					name: "Morning Break",
@@ -585,14 +656,14 @@ export function AIOnboardingFlow({
 		// Essential tasks
 		baseTasks.push(
 			{
-				name: "Lunch Break",
+				name: "Lunch & Recharge",
 				time: "12:00-1:00 PM",
 				category: "Personal",
 				duration: 60,
 				block: "afternoon",
 			},
 			{
-				name: "Evening Reflection",
+				name: "Evening Planning & Reflection",
 				time: "9:00-9:30 PM",
 				category: "Personal",
 				duration: 30,
@@ -607,17 +678,19 @@ export function AIOnboardingFlow({
 		}));
 
 		const insights = [
-			`Optimized for your work schedule: ${profile.constraints}`,
-			`Focused on your goals: ${profile.goals}`,
-			`Adapted to your work style: ${profile.workStyle}`,
-			`Includes regular breaks to maintain energy throughout the day`,
+			`Optimized for your ${profile.wakeTime} wake time and work schedule`,
+			`Focused on your key goals: ${profile.goals}`,
+			`Adapted to your work constraints: ${profile.constraints}`,
+			`Designed around your productivity preferences: ${profile.productivity}`,
+			`Includes strategic breaks to maintain energy throughout the day`,
 		];
 
 		const recommendations = [
 			"Try this schedule for a week and track how you feel",
-			"Adjust task timing based on your energy levels",
+			"Adjust task timing based on your energy levels throughout the day",
 			"Use the customization tools to fine-tune specific tasks",
-			"Remember that consistency is key to building good habits",
+			"Pay attention to which time blocks work best for different types of work",
+			"Remember that consistency is more important than perfection",
 		];
 
 		return { tasks, insights, recommendations };
@@ -663,23 +736,28 @@ export function AIOnboardingFlow({
 			});
 
 			if (response.ok) {
-				const { data } = await response.json();
-				const transformedTasks: Task[] = data.tasks.map(
-					(task: any, index: number) => ({
-						id: `ai-regenerated-task-${index}-${Date.now()}`,
-						name: task.name,
-						time: task.time,
-						category: task.category,
-						duration: task.duration,
-						block: task.block,
-					})
-				);
+				const result = await response.json();
+				if (result.success) {
+					const data = result.data;
+					const transformedTasks: Task[] = data.tasks.map(
+						(task: any, index: number) => ({
+							id: `ai-regenerated-task-${index}-${Date.now()}`,
+							name: task.name,
+							time: task.time,
+							category: task.category,
+							duration: task.duration,
+							block: task.block,
+						})
+					);
 
-				setGeneratedSchedule({
-					tasks: transformedTasks,
-					insights: data.insights,
-					recommendations: data.recommendations,
-				});
+					setGeneratedSchedule({
+						tasks: transformedTasks,
+						insights: data.insights,
+						recommendations: data.recommendations,
+					});
+				} else {
+					throw new Error(result.error);
+				}
 			} else {
 				throw new Error("Regeneration failed");
 			}

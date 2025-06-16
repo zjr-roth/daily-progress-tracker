@@ -1,4 +1,4 @@
-// app/lib/services/perplexityService.ts
+// app/lib/services/perplexityService.ts - FIXED VERSION
 import { Task, TimeBlock } from '../types';
 
 interface UserInputs {
@@ -48,7 +48,8 @@ export class PerplexityService {
 
   private static async makeAPICall(messages: any[], responseFormat?: any) {
     if (!this.API_KEY) {
-      throw new Error('Perplexity API key not configured');
+      console.warn('Perplexity API key not configured, using fallback');
+      throw new Error('API_NOT_CONFIGURED');
     }
 
     const requestBody: any = {
@@ -76,11 +77,69 @@ export class PerplexityService {
     });
 
     if (!response.ok) {
-      throw new Error(`Perplexity API error: ${response.statusText}`);
+      const errorText = await response.text();
+      console.error('Perplexity API error:', response.status, errorText);
+      throw new Error(`API_ERROR: ${response.status}`);
     }
 
     const data = await response.json();
     return data;
+  }
+
+  // FIXED: Accept goals as string instead of array
+  static async researchOptimalPractices(goals: string): Promise<ResearchResponse> {
+    const prompt = `Research the latest scientific evidence and best practices for achieving these life goals: ${goals}
+
+**Instructions:**
+1. Find recent research (last 2 years preferred) on optimal practices for these goals
+2. Determine evidence-based time allocations for related activities
+3. Provide scientific backing with specific studies or principles
+
+**Required JSON Response Format:**
+{
+  "practices": [
+    "Specific evidence-based practice for goal achievement",
+    "Another research-backed recommendation"
+  ],
+  "timeAllocations": {
+    "Deep Work": 120,
+    "Exercise": 60,
+    "Learning": 90
+  },
+  "scientificBacking": [
+    "Study or principle supporting the recommendations",
+    "Research finding that backs the time allocations"
+  ]
+}`;
+
+    try {
+      const messages = [
+        {
+          role: 'system',
+          content: 'You are a research expert specializing in productivity science, goal achievement, and evidence-based time management. Always cite recent studies and provide specific, actionable recommendations.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ];
+
+      const response = await this.makeAPICall(messages, {
+        type: "json_object"
+      });
+
+      const content = response.choices[0].message.content;
+      return JSON.parse(content);
+    } catch (error: any) {
+      console.error('Error researching practices:', error);
+
+      // Return fallback research results
+      if (error.message === 'API_NOT_CONFIGURED' || error.message.includes('API_ERROR')) {
+        return this.generateFallbackResearch(goals);
+      }
+
+      throw new Error('Failed to research optimal practices. Please try again.');
+    }
   }
 
   static async generateOptimalSchedule(userInputs: UserInputs): Promise<ScheduleResponse> {
@@ -150,8 +209,14 @@ Focus on evidence-based scheduling that aligns with the user's goals and constra
         console.error('Failed to parse Perplexity response:', content);
         throw new Error('Invalid response format from AI service');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating schedule:', error);
+
+      // Use fallback if API fails
+      if (error.message === 'API_NOT_CONFIGURED' || error.message.includes('API_ERROR')) {
+        return this.generateFallbackSchedule(userInputs);
+      }
+
       throw new Error('Failed to generate optimal schedule. Please try again.');
     }
   }
@@ -211,61 +276,138 @@ ${tasksDescription}
 
       const content = response.choices[0].message.content;
       return JSON.parse(content);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error optimizing schedule:', error);
+
+      // Return fallback optimization
+      if (error.message === 'API_NOT_CONFIGURED' || error.message.includes('API_ERROR')) {
+        return this.generateFallbackOptimization(currentTasks, optimizationGoal);
+      }
+
       throw new Error('Failed to optimize schedule. Please try again.');
     }
   }
 
-  static async researchOptimalPractices(goals: string[]): Promise<ResearchResponse> {
-    const goalsText = goals.join(', ');
+  // FIXED: Generate fallback research for when API is unavailable
+  private static generateFallbackResearch(goals: string): ResearchResponse {
+    console.log('Using fallback research for goals:', goals);
 
-    const prompt = `Research the latest scientific evidence and best practices for achieving these life goals: ${goalsText}
+    const goalLower = goals.toLowerCase();
+    const practices: string[] = [];
+    const timeAllocations: Record<string, number> = {};
+    const scientificBacking: string[] = [];
 
-**Instructions:**
-1. Find recent research (last 2 years preferred) on optimal practices for these goals
-2. Determine evidence-based time allocations for related activities
-3. Provide scientific backing with specific studies or principles
-
-**Required JSON Response Format:**
-{
-  "practices": [
-    "Specific evidence-based practice for goal achievement",
-    "Another research-backed recommendation"
-  ],
-  "timeAllocations": {
-    "Deep Work": 120,
-    "Exercise": 60,
-    "Learning": 90
-  },
-  "scientificBacking": [
-    "Study or principle supporting the recommendations",
-    "Research finding that backs the time allocations"
-  ]
-}`;
-
-    try {
-      const messages = [
-        {
-          role: 'system',
-          content: 'You are a research expert specializing in productivity science, goal achievement, and evidence-based time management. Always cite recent studies and provide specific, actionable recommendations.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ];
-
-      const response = await this.makeAPICall(messages, {
-        type: "json_object"
-      });
-
-      const content = response.choices[0].message.content;
-      return JSON.parse(content);
-    } catch (error) {
-      console.error('Error researching practices:', error);
-      throw new Error('Failed to research optimal practices. Please try again.');
+    // Analyze goals and provide relevant practices
+    if (goalLower.includes('fintech') || goalLower.includes('entrepreneur') || goalLower.includes('business')) {
+      practices.push(
+        'Focus on deep work sessions during peak cognitive hours (typically 9-11 AM)',
+        'Dedicate specific time blocks for networking and industry learning',
+        'Implement the 80/20 rule: focus 80% of time on high-impact activities'
+      );
+      timeAllocations['Strategic Planning'] = 60;
+      timeAllocations['Industry Research'] = 90;
+      timeAllocations['Networking'] = 45;
+      scientificBacking.push(
+        'Research shows peak cognitive performance occurs 2-4 hours after waking',
+        'The Pareto Principle (80/20 rule) is validated across multiple productivity studies'
+      );
     }
+
+    if (goalLower.includes('study') || goalLower.includes('cpa') || goalLower.includes('math') || goalLower.includes('programming')) {
+      practices.push(
+        'Use the Pomodoro Technique: 25-minute focused sessions with 5-minute breaks',
+        'Schedule the most challenging subjects during morning hours',
+        'Implement spaced repetition for long-term retention'
+      );
+      timeAllocations['Deep Study'] = 120;
+      timeAllocations['Practice Problems'] = 90;
+      timeAllocations['Review & Reflection'] = 30;
+      scientificBacking.push(
+        'Cognitive Load Theory suggests breaking complex learning into manageable chunks',
+        'Circadian rhythm research shows optimal learning occurs during morning hours'
+      );
+    }
+
+    if (goalLower.includes('fitness') || goalLower.includes('health') || goalLower.includes('exercise')) {
+      practices.push(
+        'Schedule exercise at consistent times to build habit patterns',
+        'Include both cardiovascular and strength training for optimal health',
+        'Plan recovery time between intense workout sessions'
+      );
+      timeAllocations['Exercise'] = 60;
+      timeAllocations['Meal Planning'] = 30;
+      timeAllocations['Recovery/Stretching'] = 20;
+      scientificBacking.push(
+        'Habit formation research shows consistency of timing increases adherence',
+        'Exercise physiology research supports varied training modalities'
+      );
+    }
+
+    // Add general productivity practices if no specific goals detected
+    if (practices.length === 0) {
+      practices.push(
+        'Implement time-blocking to create structure and reduce decision fatigue',
+        'Use the two-minute rule: do tasks immediately if they take less than 2 minutes',
+        'Schedule regular breaks to maintain cognitive performance throughout the day'
+      );
+      timeAllocations['Focused Work'] = 120;
+      timeAllocations['Administrative Tasks'] = 45;
+      timeAllocations['Planning & Review'] = 30;
+      scientificBacking.push(
+        'Time-blocking reduces cognitive switching costs and improves focus',
+        'Regular breaks prevent cognitive fatigue and maintain performance'
+      );
+    }
+
+    return {
+      practices: practices.slice(0, 5), // Limit to 5 practices
+      timeAllocations,
+      scientificBacking: scientificBacking.slice(0, 3) // Limit to 3 backing statements
+    };
+  }
+
+  private static generateFallbackOptimization(
+    currentTasks: Task[],
+    optimizationGoal: string
+  ): OptimizationResponse {
+    const suggestions: OptimizationSuggestion[] = [];
+    const insights: string[] = [];
+
+    // Analyze current schedule for basic optimization opportunities
+    const morningTasks = currentTasks.filter(t => t.block === 'morning');
+    const afternoonTasks = currentTasks.filter(t => t.block === 'afternoon');
+    const eveningTasks = currentTasks.filter(t => t.block === 'evening');
+
+    // Check for schedule balance
+    if (morningTasks.length < 2 && afternoonTasks.length > 4) {
+      suggestions.push({
+        type: 'move',
+        task: afternoonTasks[0].name,
+        newTime: '9:00-10:00 AM',
+        reasoning: 'Moving tasks to morning hours can leverage peak cognitive performance'
+      });
+    }
+
+    // Check for missing breaks
+    const totalDuration = currentTasks.reduce((sum, task) => sum + task.duration, 0);
+    if (totalDuration > 360 && !currentTasks.some(task => task.name.toLowerCase().includes('break'))) {
+      suggestions.push({
+        type: 'add',
+        task: 'Mid-day Break',
+        newTime: '2:30-2:45 PM',
+        reasoning: 'Regular breaks prevent cognitive fatigue and maintain productivity'
+      });
+    }
+
+    // Add insights based on analysis
+    insights.push(`Current schedule utilization: ${Math.round((totalDuration / 900) * 100)}%`);
+    insights.push(`Morning block has ${morningTasks.length} tasks - optimal for focused work`);
+
+    if (suggestions.length === 0) {
+      insights.push('Your schedule appears well-balanced with good time distribution');
+    }
+
+    return { suggestions, insights };
   }
 
   private static validateAndProcessScheduleResponse(response: any): ScheduleResponse {
@@ -306,65 +448,216 @@ ${tasksDescription}
     };
   }
 
-  // Fallback method for when API is unavailable
+  // Enhanced fallback method for when API is unavailable
   static async generateFallbackSchedule(userInputs: UserInputs): Promise<ScheduleResponse> {
-    console.warn('Using fallback schedule generation');
+    console.warn('Using enhanced fallback schedule generation');
 
-    const tasks: GeneratedTask[] = [
-      {
-        name: "Morning Routine & Planning",
-        time: "7:00-7:30 AM",
-        category: "Personal",
-        duration: 30,
-        block: "morning",
-        reasoning: "Starting the day with structure sets a positive tone"
-      },
-      {
-        name: "Deep Work Session",
-        time: "8:00-10:00 AM",
-        category: "Study",
-        duration: 120,
-        block: "morning",
-        reasoning: "Morning hours typically offer peak cognitive performance"
-      },
-      {
-        name: "Break & Exercise",
-        time: "10:00-10:30 AM",
-        category: "Personal",
-        duration: 30,
-        block: "morning",
-        reasoning: "Regular breaks maintain sustained productivity"
-      },
-      {
-        name: "Focused Work",
-        time: "1:00-2:30 PM",
-        category: "Work",
+    const profile = userInputs;
+    const baseTasks: Omit<GeneratedTask, 'reasoning'>[] = [];
+
+    // Determine wake time and adjust schedule accordingly
+    const wakeTimeHour = this.parseWakeTime(profile.wakeTime);
+    const scheduleStart = Math.max(wakeTimeHour, 6); // Don't start before 6 AM
+
+    // Morning routine (always included)
+    baseTasks.push({
+      name: "Morning Routine & Planning",
+      time: `${scheduleStart}:00-${scheduleStart}:30 AM`,
+      category: "Personal",
+      duration: 30,
+      block: "morning",
+    });
+
+    // Analyze goals to determine task priorities
+    const goals = profile.goals.toLowerCase();
+    const constraints = profile.constraints.toLowerCase();
+
+    // Work/Study blocks based on constraints
+    if (constraints.includes('9') && constraints.includes('5')) {
+      baseTasks.push(
+        {
+          name: "Deep Work Session 1",
+          time: "9:00-11:00 AM",
+          category: "Work",
+          duration: 120,
+          block: "morning",
+        },
+        {
+          name: "Administrative Tasks",
+          time: "11:00-11:30 AM",
+          category: "Work",
+          duration: 30,
+          block: "morning",
+        },
+        {
+          name: "Project Work",
+          time: "1:00-3:00 PM",
+          category: "Work",
+          duration: 120,
+          block: "afternoon",
+        }
+      );
+    } else if (constraints.includes('student') || goals.includes('study')) {
+      baseTasks.push(
+        {
+          name: "Primary Study Session",
+          time: `${scheduleStart + 1}:00-${scheduleStart + 3}:00 AM`,
+          category: "Study",
+          duration: 120,
+          block: "morning",
+        },
+        {
+          name: "Practice & Review",
+          time: "2:00-3:30 PM",
+          category: "Study",
+          duration: 90,
+          block: "afternoon",
+        }
+      );
+    }
+
+    // Add goal-specific tasks
+    if (goals.includes('fintech') || goals.includes('entrepreneur')) {
+      baseTasks.push({
+        name: "Industry Research & Market Analysis",
+        time: "3:30-5:00 PM",
+        category: "Research",
         duration: 90,
         block: "afternoon",
-        reasoning: "Post-lunch period good for structured tasks"
+      });
+    }
+
+    if (goals.includes('health') || goals.includes('fitness') || goals.includes('exercise')) {
+      baseTasks.push({
+        name: "Exercise & Fitness",
+        time: "6:00-7:00 PM",
+        category: "Personal",
+        duration: 60,
+        block: "evening",
+      });
+    }
+
+    if (goals.includes('programming') || goals.includes('coding')) {
+      baseTasks.push({
+        name: "Programming & Development",
+        time: "7:30-9:00 PM",
+        category: "Study",
+        duration: 90,
+        block: "evening",
+      });
+    }
+
+    // Add work style based tasks
+    if (profile.workStyle.toLowerCase().includes('break')) {
+      baseTasks.push(
+        {
+          name: "Mid-Morning Break",
+          time: "10:30-10:45 AM",
+          category: "Personal",
+          duration: 15,
+          block: "morning",
+        },
+        {
+          name: "Afternoon Break",
+          time: "3:30-3:45 PM",
+          category: "Personal",
+          duration: 15,
+          block: "afternoon",
+        }
+      );
+    }
+
+    // Essential tasks
+    baseTasks.push(
+      {
+        name: "Lunch & Recharge",
+        time: "12:00-1:00 PM",
+        category: "Personal",
+        duration: 60,
+        block: "afternoon",
       },
       {
-        name: "Review & Planning",
-        time: "7:00-7:30 PM",
+        name: "Evening Planning & Reflection",
+        time: "9:00-9:30 PM",
         category: "Personal",
         duration: 30,
         block: "evening",
-        reasoning: "Evening reflection helps consolidate learning"
       }
+    );
+
+    // Convert to full tasks with reasoning
+    const tasks: GeneratedTask[] = baseTasks.map((task, index) => ({
+      ...task,
+      reasoning: this.generateTaskReasoning(task, profile)
+    }));
+
+    const insights = [
+      `Schedule optimized for ${profile.wakeTime} wake time`,
+      `Focused on your primary goals: ${profile.goals}`,
+      `Adapted to your work constraints: ${profile.constraints}`,
+      `Designed around your work style preferences`,
+      `Includes ${tasks.length} strategically placed tasks across all time blocks`
     ];
 
-    return {
-      tasks,
-      insights: [
-        "This schedule follows research-backed productivity principles",
-        "Peak cognitive hours are utilized for most demanding tasks",
-        "Regular breaks are included to maintain energy levels"
-      ],
-      recommendations: [
-        "Try this schedule for a week and adjust based on your energy levels",
-        "Pay attention to when you feel most and least productive",
-        "Consider your chronotype when fine-tuning task timing"
-      ]
-    };
+    const recommendations = [
+      "Try this schedule for one week and track your energy levels",
+      "Adjust task timing based on when you feel most productive",
+      "Use the customization tools to fine-tune specific tasks",
+      "Consider the 2-minute rule for small tasks throughout the day",
+      "Remember that consistency is more important than perfection"
+    ];
+
+    return { tasks, insights, recommendations };
+  }
+
+  private static parseWakeTime(wakeTimeString: string): number {
+    const match = wakeTimeString.match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);
+    if (!match) return 7; // Default to 7 AM
+
+    let hour = parseInt(match[1]);
+    const period = match[3]?.toUpperCase();
+
+    if (period === 'PM' && hour !== 12) {
+      hour += 12;
+    } else if (period === 'AM' && hour === 12) {
+      hour = 0;
+    }
+
+    return Math.max(5, Math.min(10, hour)); // Clamp between 5 AM and 10 AM
+  }
+
+  private static generateTaskReasoning(task: Omit<GeneratedTask, 'reasoning'>, profile: UserInputs): string {
+    const taskName = task.name.toLowerCase();
+    const block = task.block;
+    const goals = profile.goals.toLowerCase();
+
+    if (taskName.includes('morning routine')) {
+      return 'Starting the day with structure and planning sets a positive foundation for productivity';
+    }
+
+    if (taskName.includes('deep work') || taskName.includes('study')) {
+      if (block === 'morning') {
+        return 'Morning hours typically offer peak cognitive performance and minimal distractions';
+      }
+      return 'Focused work sessions are essential for meaningful progress on complex tasks';
+    }
+
+    if (taskName.includes('exercise') || taskName.includes('fitness')) {
+      return 'Regular physical activity improves cognitive function and provides stress relief';
+    }
+
+    if (taskName.includes('break')) {
+      return 'Strategic breaks prevent cognitive fatigue and maintain sustained productivity';
+    }
+
+    if (taskName.includes('research') && goals.includes('fintech')) {
+      return 'Industry knowledge is crucial for success in the competitive fintech landscape';
+    }
+
+    if (taskName.includes('planning') || taskName.includes('reflection')) {
+      return 'Daily reflection and planning helps consolidate learning and prepare for tomorrow';
+    }
+
+    return 'This task is strategically placed to optimize your daily productivity flow';
   }
 }
