@@ -1,3 +1,4 @@
+// app/components/AIOnboardingFlow.tsx - Enhanced with real AI integration
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
@@ -5,6 +6,7 @@ import { Task, TaskCategory, TimeBlock } from "../lib/types";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
+import { MessageBubble, TypingIndicator, type Message } from "./MessageBubble";
 import {
 	Send,
 	Bot,
@@ -19,16 +21,10 @@ import {
 	ChevronRight,
 	Lightbulb,
 	X,
+	Search,
+	Brain,
 } from "lucide-react";
 import { cn } from "../lib/utils";
-
-interface Message {
-	id: string;
-	type: "user" | "ai" | "system";
-	content: string;
-	timestamp: Date;
-	suggestions?: string[];
-}
 
 interface OnboardingStep {
 	id: string;
@@ -47,28 +43,38 @@ interface AIOnboardingProps {
 	onScheduleGenerated: (schedule: GeneratedSchedule) => void;
 	onClose: () => void;
 	userName: string;
+	mode?: "onboarding" | "assistant";
+	currentTasks?: Task[];
 }
 
 export function AIOnboardingFlow({
 	onScheduleGenerated,
 	onClose,
 	userName,
+	mode = "onboarding",
+	currentTasks = [],
 }: AIOnboardingProps) {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [currentInput, setCurrentInput] = useState("");
 	const [isTyping, setIsTyping] = useState(false);
 	const [currentStep, setCurrentStep] = useState(0);
 	const [userProfile, setUserProfile] = useState({
-		workSchedule: "",
-		priorities: "",
+		constraints: "",
 		goals: "",
-		preferences: "",
-		availability: "",
+		productivity: "",
+		wakeTime: "",
+		workStyle: "",
 	});
 	const [generatedSchedule, setGeneratedSchedule] =
 		useState<GeneratedSchedule | null>(null);
-	const messagesEndRef = useRef<HTMLDivElement>(null);
 	const [isGenerating, setIsGenerating] = useState(false);
+	const [researchResults, setResearchResults] = useState<{
+		practices: string[];
+		timeAllocations: Record<string, number>;
+		scientificBacking: string[];
+	} | null>(null);
+	const [isResearching, setIsResearching] = useState(false);
+	const messagesEndRef = useRef<HTMLDivElement>(null);
 
 	const onboardingSteps: OnboardingStep[] = [
 		{
@@ -78,21 +84,27 @@ export function AIOnboardingFlow({
 			completed: false,
 		},
 		{
-			id: "work_schedule",
-			title: "Work Schedule",
-			description: "Understanding your routine",
+			id: "constraints",
+			title: "Constraints",
+			description: "Your fixed commitments",
 			completed: false,
 		},
 		{
-			id: "priorities",
-			title: "Priorities",
-			description: "Your main focus areas",
+			id: "goals",
+			title: "Goals",
+			description: "What you're optimizing for",
+			completed: false,
+		},
+		{
+			id: "research",
+			title: "Research",
+			description: "AI analyzing best practices",
 			completed: false,
 		},
 		{
 			id: "preferences",
 			title: "Preferences",
-			description: "How you like to work",
+			description: "Your work style",
 			completed: false,
 		},
 		{
@@ -104,17 +116,17 @@ export function AIOnboardingFlow({
 	];
 
 	const quickResponses = {
-		work_schedule: [
+		constraints: [
 			"I work 9-5 on weekdays",
 			"I'm a student with flexible hours",
 			"I work part-time in the evenings",
-			"I work from home with my own schedule",
+			"I work from home with flexible schedule",
 		],
-		priorities: [
+		goals: [
 			"Career development and learning",
-			"Health and fitness",
-			"Personal projects and hobbies",
-			"Family time and relationships",
+			"Health and fitness improvement",
+			"Academic excellence",
+			"Work-life balance",
 		],
 		preferences: [
 			"I'm most productive in the morning",
@@ -125,13 +137,26 @@ export function AIOnboardingFlow({
 	};
 
 	useEffect(() => {
-		// Initialize conversation
-		addMessage({
-			type: "ai",
-			content: `Hi ${userName}! 👋 I'm your AI scheduling assistant. I'm here to help you create a personalized daily schedule that fits your lifestyle perfectly.\n\nLet's start by understanding your typical day. What does your work or study schedule usually look like?`,
-			suggestions: quickResponses.work_schedule,
-		});
-	}, [userName]);
+		// Initialize conversation based on mode
+		if (mode === "onboarding") {
+			addMessage({
+				type: "ai",
+				content: `Hey welcome to Atomic, I'm here to help you level up and stay on top of your tasks! Let's get started!\n\nWhat are your current fixed-time constraints? (work hours, commitments, classes, etc.)`,
+				suggestions: quickResponses.constraints,
+			});
+		} else {
+			addMessage({
+				type: "ai",
+				content: `Hi ${userName}! I'm your AI assistant. I can help you optimize your current schedule, suggest improvements, or create new task arrangements. What would you like to work on today?`,
+				suggestions: [
+					"Optimize my current schedule",
+					"Suggest better time slots",
+					"Help me add a new routine",
+					"Analyze my productivity patterns",
+				],
+			});
+		}
+	}, [userName, mode]);
 
 	useEffect(() => {
 		scrollToBottom();
@@ -144,7 +169,7 @@ export function AIOnboardingFlow({
 	const addMessage = (message: Omit<Message, "id" | "timestamp">) => {
 		const newMessage: Message = {
 			...message,
-			id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Unique ID
+			id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
 			timestamp: new Date(),
 		};
 		setMessages((prev) => [...prev, newMessage]);
@@ -163,51 +188,66 @@ export function AIOnboardingFlow({
 			setTimeout(resolve, 1000 + Math.random() * 2000)
 		);
 
-		await processUserInput(userMessage);
+		if (mode === "onboarding") {
+			await processOnboardingInput(userMessage);
+		} else {
+			await processAssistantInput(userMessage);
+		}
 		setIsTyping(false);
 	};
 
-	const processUserInput = async (input: string) => {
-		const lowerInput = input.toLowerCase();
-
+	const processOnboardingInput = async (input: string) => {
 		switch (currentStep) {
-			case 0: // Work schedule
-				setUserProfile((prev) => ({ ...prev, workSchedule: input }));
+			case 0: // Constraints
+				setUserProfile((prev) => ({ ...prev, constraints: input }));
 				addMessage({
 					type: "ai",
-					content: `Perfect! I understand your work schedule. Now, what are your main priorities and goals? This could include career development, health, personal projects, or anything else that's important to you.`,
-					suggestions: quickResponses.priorities,
+					content: `Perfect! I understand your constraints. Now, what are your goals in life, what are you trying to optimize for? (health, knowledge, relationships, career, etc.)`,
+					suggestions: quickResponses.goals,
 				});
 				updateStep(1);
 				break;
 
-			case 1: // Priorities
-				setUserProfile((prev) => ({ ...prev, priorities: input }));
+			case 1: // Goals
+				setUserProfile((prev) => ({ ...prev, goals: input }));
 				addMessage({
-					type: "ai",
-					content: `Great priorities! Now let's talk about your work preferences. When do you feel most productive? Do you prefer longer focused sessions or shorter bursts with breaks?`,
-					suggestions: quickResponses.preferences,
+					type: "system",
+					content: "Researching optimal practices for your goals...",
 				});
+				await performGoalResearch(input);
 				updateStep(2);
 				break;
 
-			case 2: // Preferences
-				setUserProfile((prev) => ({ ...prev, preferences: input }));
-				addMessage({
-					type: "ai",
-					content: `Excellent! Last question: Are there any specific time constraints or availability windows I should know about? For example, specific times you're not available, or when you prefer certain activities?`,
-				});
-				updateStep(3);
+			case 2: // This step is handled by research completion
 				break;
 
-			case 3: // Availability
-				setUserProfile((prev) => ({ ...prev, availability: input }));
+			case 3: // Preferences
+				setUserProfile((prev) => ({ ...prev, productivity: input }));
+				addMessage({
+					type: "ai",
+					content: `Great! Last question: When do you feel most productive? What is your preferred wake up time? Do you prefer long work pushes with longer breaks, or short work pushes with shorter breaks?`,
+				});
+				updateStep(4);
+				break;
+
+			case 4: // Work style
+				const wakeTimeMatch = input.match(
+					/(\d{1,2}(?::\d{2})?\s*(?:AM|PM)?)/i
+				);
+				const wakeTime = wakeTimeMatch ? wakeTimeMatch[1] : "7:00 AM";
+
+				setUserProfile((prev) => ({
+					...prev,
+					workStyle: input,
+					wakeTime: wakeTime,
+				}));
+
 				addMessage({
 					type: "ai",
 					content: `Perfect! I now have everything I need to create your personalized schedule. Let me analyze your preferences and generate a daily routine that maximizes your productivity and well-being.`,
 				});
-				await generateSchedule();
-				updateStep(4);
+				await generateAISchedule();
+				updateStep(5);
 				break;
 
 			default:
@@ -218,11 +258,159 @@ export function AIOnboardingFlow({
 		}
 	};
 
-	const updateStep = (stepIndex: number) => {
-		setCurrentStep(stepIndex);
+	const processAssistantInput = async (input: string) => {
+		const lowerInput = input.toLowerCase();
+
+		if (lowerInput.includes("optimize") || lowerInput.includes("improve")) {
+			await optimizeCurrentSchedule(input);
+		} else if (
+			lowerInput.includes("research") ||
+			lowerInput.includes("best practices")
+		) {
+			await performGoalResearch(input);
+		} else {
+			addMessage({
+				type: "ai",
+				content: `I can help you with schedule optimization, research best practices for your goals, or provide specific recommendations. What would you like to focus on?`,
+				suggestions: [
+					"Optimize my current schedule",
+					"Research best practices for my goals",
+					"Suggest time slots for a new task",
+					"Analyze my schedule efficiency",
+				],
+			});
+		}
 	};
 
-	const generateSchedule = async () => {
+	const performGoalResearch = async (goals: string) => {
+		setIsResearching(true);
+		try {
+			const response = await fetch("/api/ai/research", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					goals: goals.split(",").map((g) => g.trim()),
+				}),
+			});
+
+			if (!response.ok) {
+				throw new Error("Research request failed");
+			}
+
+			const { data } = await response.json();
+			setResearchResults(data);
+
+			// Create insights message
+			const insights = [
+				"🧠 **Research-Based Insights:**",
+				...data.practices.slice(0, 3),
+				"",
+				"📊 **Optimal Time Allocations:**",
+				...Object.entries(data.timeAllocations)
+					.slice(0, 3)
+					.map(
+						([activity, minutes]) =>
+							`• ${activity}: ${minutes} minutes daily`
+					),
+				"",
+				"🔬 **Scientific Backing:**",
+				...data.scientificBacking.slice(0, 2),
+			].join("\n");
+
+			addMessage({
+				type: "ai",
+				content: insights,
+			});
+
+			if (mode === "onboarding") {
+				addMessage({
+					type: "ai",
+					content: `Based on this research, when do you feel most productive? What is your preferred wake up time? Do you prefer long work pushes with longer breaks, or short work pushes with shorter breaks?`,
+					suggestions: quickResponses.preferences,
+				});
+				updateStep(3);
+			}
+		} catch (error) {
+			console.error("Research failed:", error);
+			addMessage({
+				type: "ai",
+				content: `I encountered an issue while researching. Let me continue with general best practices for your goals.`,
+			});
+
+			if (mode === "onboarding") {
+				addMessage({
+					type: "ai",
+					content: `When do you feel most productive? What is your preferred wake up time? Do you prefer long work pushes with longer breaks, or short work pushes with shorter breaks?`,
+					suggestions: quickResponses.preferences,
+				});
+				updateStep(3);
+			}
+		} finally {
+			setIsResearching(false);
+		}
+	};
+
+	const optimizeCurrentSchedule = async (optimizationGoal: string) => {
+		setIsGenerating(true);
+		addMessage({
+			type: "system",
+			content:
+				"Analyzing your current schedule and generating optimization suggestions...",
+		});
+
+		try {
+			const response = await fetch("/api/ai/optimize", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					currentTasks,
+					optimizationGoal,
+				}),
+			});
+
+			if (!response.ok) {
+				throw new Error("Optimization request failed");
+			}
+
+			const { data } = await response.json();
+
+			const optimizationContent = [
+				"🎯 **Schedule Optimization Results:**",
+				"",
+				"**Suggested Changes:**",
+				...data.suggestions.map(
+					(suggestion: any) =>
+						`• ${suggestion.type.toUpperCase()}: ${
+							suggestion.task
+						}${
+							suggestion.newTime ? ` → ${suggestion.newTime}` : ""
+						}\n  Reason: ${suggestion.reasoning}`
+				),
+				"",
+				"**Key Insights:**",
+				...data.insights,
+			].join("\n");
+
+			addMessage({
+				type: "ai",
+				content: optimizationContent,
+			});
+		} catch (error) {
+			console.error("Optimization failed:", error);
+			addMessage({
+				type: "ai",
+				content: `I encountered an issue while optimizing your schedule. Here are some general recommendations:\n\n• Consider moving demanding tasks to your peak energy hours\n• Ensure adequate breaks between intensive activities\n• Group similar tasks together to minimize context switching`,
+			});
+		} finally {
+			setIsGenerating(false);
+		}
+	};
+
+	const generateAISchedule = async () => {
 		setIsGenerating(true);
 
 		addMessage({
@@ -231,41 +419,79 @@ export function AIOnboardingFlow({
 				"Analyzing your preferences and generating your personalized schedule...",
 		});
 
-		// Simulate AI processing time
-		await new Promise((resolve) => setTimeout(resolve, 3000));
+		try {
+			const response = await fetch("/api/ai/onboarding", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					userInputs: userProfile,
+				}),
+			});
 
-		// Generate schedule based on user inputs
-		const schedule = await createPersonalizedSchedule();
-		setGeneratedSchedule(schedule);
+			if (!response.ok) {
+				throw new Error("Schedule generation failed");
+			}
 
-		addMessage({
-			type: "ai",
-			content: `🎉 Your personalized schedule is ready! I've created a balanced daily routine based on your preferences:\n\n✅ Optimized for your productive hours\n✅ Includes your priority activities\n✅ Respects your availability constraints\n✅ Includes breaks and personal time\n\nYou can review and customize it further once we're done here. Would you like to use this schedule?`,
-		});
+			const { data } = await response.json();
 
-		setIsGenerating(false);
+			// Transform the AI response to match our Task interface
+			const transformedTasks: Task[] = data.tasks.map(
+				(task: any, index: number) => ({
+					id: `ai-generated-task-${index}-${Date.now()}`,
+					name: task.name,
+					time: task.time,
+					category: task.category,
+					duration: task.duration,
+					block: task.block,
+				})
+			);
+
+			const schedule: GeneratedSchedule = {
+				tasks: transformedTasks,
+				insights: data.insights,
+				recommendations: data.recommendations,
+			};
+
+			setGeneratedSchedule(schedule);
+
+			addMessage({
+				type: "ai",
+				content: `🎉 Your personalized schedule is ready! I've created a balanced daily routine based on your preferences and the latest productivity research:\n\n✅ Optimized for your productive hours and constraints\n✅ Incorporates research-backed practices for your goals\n✅ Includes your preferred work style and timing\n✅ Balances work, personal time, and breaks\n\nYou can review the full schedule below. Would you like to use this schedule?`,
+			});
+		} catch (error) {
+			console.error("Schedule generation failed:", error);
+			// Fallback to a basic schedule
+			const fallbackSchedule = await createFallbackSchedule();
+			setGeneratedSchedule(fallbackSchedule);
+
+			addMessage({
+				type: "ai",
+				content: `I created a basic schedule based on your preferences. While I couldn't access the latest research due to a connectivity issue, this schedule follows proven productivity principles. You can customize it further once we're done here.`,
+			});
+		} finally {
+			setIsGenerating(false);
+		}
 	};
 
-	const createPersonalizedSchedule = async (): Promise<GeneratedSchedule> => {
-		// This is a simplified schedule generation
-		// In a real implementation, this would use AI/ML models
+	const createFallbackSchedule = async (): Promise<GeneratedSchedule> => {
 		const profile = userProfile;
-
 		const baseTasks: Omit<Task, "id">[] = [];
 
 		// Morning routine (always included)
 		baseTasks.push({
-			name: "Morning Routine",
+			name: "Morning Routine & Planning",
 			time: "7:00-7:30 AM",
 			category: "Personal",
 			duration: 30,
 			block: "morning",
 		});
 
-		// Work/Study blocks based on schedule
+		// Work/Study blocks based on constraints
 		if (
-			profile.workSchedule.toLowerCase().includes("9") &&
-			profile.workSchedule.toLowerCase().includes("5")
+			profile.constraints.toLowerCase().includes("9") &&
+			profile.constraints.toLowerCase().includes("5")
 		) {
 			baseTasks.push(
 				{
@@ -276,26 +502,25 @@ export function AIOnboardingFlow({
 					block: "morning",
 				},
 				{
-					name: "Email & Communication",
+					name: "Communication & Email",
 					time: "11:00-11:30 AM",
-					category: "Study",
+					category: "Work",
 					duration: 30,
 					block: "morning",
 				},
 				{
 					name: "Project Work",
 					time: "1:00-3:00 PM",
-					category: "Study",
+					category: "Work",
 					duration: 120,
 					block: "afternoon",
 				}
 			);
 		} else {
-			// Flexible schedule
 			baseTasks.push(
 				{
 					name: "Focused Work Session",
-					time: "10:00-12:00 PM",
+					time: "9:00-11:00 AM",
 					category: "Study",
 					duration: 120,
 					block: "morning",
@@ -303,17 +528,17 @@ export function AIOnboardingFlow({
 				{
 					name: "Creative Work",
 					time: "2:00-4:00 PM",
-					category: "Research",
+					category: "Work",
 					duration: 120,
 					block: "afternoon",
 				}
 			);
 		}
 
-		// Add priority-based tasks
+		// Add goal-based tasks
 		if (
-			profile.priorities.toLowerCase().includes("health") ||
-			profile.priorities.toLowerCase().includes("fitness")
+			profile.goals.toLowerCase().includes("health") ||
+			profile.goals.toLowerCase().includes("fitness")
 		) {
 			baseTasks.push({
 				name: "Exercise & Fitness",
@@ -325,20 +550,20 @@ export function AIOnboardingFlow({
 		}
 
 		if (
-			profile.priorities.toLowerCase().includes("learning") ||
-			profile.priorities.toLowerCase().includes("development")
+			profile.goals.toLowerCase().includes("learning") ||
+			profile.goals.toLowerCase().includes("development")
 		) {
 			baseTasks.push({
 				name: "Skill Development",
 				time: "7:30-8:30 PM",
-				category: "Research",
+				category: "Study",
 				duration: 60,
 				block: "evening",
 			});
 		}
 
-		// Add break times based on preferences
-		if (profile.preferences.toLowerCase().includes("break")) {
+		// Add break times based on work style
+		if (profile.workStyle.toLowerCase().includes("break")) {
 			baseTasks.push(
 				{
 					name: "Morning Break",
@@ -349,7 +574,7 @@ export function AIOnboardingFlow({
 				},
 				{
 					name: "Afternoon Break",
-					time: "3:00-3:15 PM",
+					time: "3:30-3:45 PM",
 					category: "Personal",
 					duration: 15,
 					block: "afternoon",
@@ -360,7 +585,7 @@ export function AIOnboardingFlow({
 		// Essential tasks
 		baseTasks.push(
 			{
-				name: "Lunch",
+				name: "Lunch Break",
 				time: "12:00-1:00 PM",
 				category: "Personal",
 				duration: 60,
@@ -378,24 +603,28 @@ export function AIOnboardingFlow({
 		// Convert to full tasks with IDs
 		const tasks: Task[] = baseTasks.map((task, index) => ({
 			...task,
-			id: `ai-generated-task-${index}-${Date.now()}`,
+			id: `fallback-task-${index}-${Date.now()}`,
 		}));
 
 		const insights = [
-			`Based on your work schedule, I've optimized your most important tasks for peak productivity hours`,
-			`Your priorities (${profile.priorities}) are reflected in dedicated time blocks`,
-			`I've included regular breaks to maintain energy throughout the day`,
-			`The schedule balances work, personal development, and self-care`,
+			`Optimized for your work schedule: ${profile.constraints}`,
+			`Focused on your goals: ${profile.goals}`,
+			`Adapted to your work style: ${profile.workStyle}`,
+			`Includes regular breaks to maintain energy throughout the day`,
 		];
 
 		const recommendations = [
-			"Try this schedule for a week and adjust as needed",
-			"Use the edit functionality to fine-tune task timing",
-			"Track your energy levels to optimize task placement",
+			"Try this schedule for a week and track how you feel",
+			"Adjust task timing based on your energy levels",
+			"Use the customization tools to fine-tune specific tasks",
 			"Remember that consistency is key to building good habits",
 		];
 
 		return { tasks, insights, recommendations };
+	};
+
+	const updateStep = (stepIndex: number) => {
+		setCurrentStep(stepIndex);
 	};
 
 	const handleQuickResponse = (response: string) => {
@@ -416,9 +645,49 @@ export function AIOnboardingFlow({
 			content: "Let me create a different schedule variation for you...",
 		});
 
-		await new Promise((resolve) => setTimeout(resolve, 2000));
-		const newSchedule = await createPersonalizedSchedule();
-		setGeneratedSchedule(newSchedule);
+		// Add slight variation to user profile for different results
+		const variedProfile = {
+			...userProfile,
+			workStyle: userProfile.workStyle + " with more flexibility",
+		};
+
+		try {
+			const response = await fetch("/api/ai/onboarding", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					userInputs: variedProfile,
+				}),
+			});
+
+			if (response.ok) {
+				const { data } = await response.json();
+				const transformedTasks: Task[] = data.tasks.map(
+					(task: any, index: number) => ({
+						id: `ai-regenerated-task-${index}-${Date.now()}`,
+						name: task.name,
+						time: task.time,
+						category: task.category,
+						duration: task.duration,
+						block: task.block,
+					})
+				);
+
+				setGeneratedSchedule({
+					tasks: transformedTasks,
+					insights: data.insights,
+					recommendations: data.recommendations,
+				});
+			} else {
+				throw new Error("Regeneration failed");
+			}
+		} catch (error) {
+			console.error("Regeneration failed:", error);
+			const newSchedule = await createFallbackSchedule();
+			setGeneratedSchedule(newSchedule);
+		}
 
 		addMessage({
 			type: "ai",
@@ -439,10 +708,14 @@ export function AIOnboardingFlow({
 							</div>
 							<div>
 								<CardTitle className="text-xl">
-									AI Schedule Assistant
+									{mode === "onboarding"
+										? "AI Schedule Assistant"
+										: "AI Productivity Assistant"}
 								</CardTitle>
 								<p className="text-sm text-muted-foreground">
-									Creating your personalized daily routine
+									{mode === "onboarding"
+										? "Creating your personalized daily routine"
+										: "Optimizing your schedule with AI insights"}
 								</p>
 							</div>
 						</div>
@@ -451,29 +724,31 @@ export function AIOnboardingFlow({
 						</Button>
 					</div>
 
-					{/* Progress Steps */}
-					<div className="flex items-center gap-2 mt-4 overflow-x-auto pb-2">
-						{onboardingSteps.map((step, index) => (
-							<div
-								key={`step-${step.id}-${index}`}
-								className={cn(
-									"flex items-center gap-2 px-3 py-2 rounded-full text-xs font-medium whitespace-nowrap transition-all",
-									index <= currentStep
-										? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
-										: "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
-								)}
-							>
-								{index < currentStep ? (
-									<CheckCircle className="h-3 w-3" />
-								) : index === currentStep ? (
-									<div className="h-3 w-3 bg-blue-500 rounded-full animate-pulse" />
-								) : (
-									<div className="h-3 w-3 bg-gray-300 rounded-full" />
-								)}
-								<span>{step.title}</span>
-							</div>
-						))}
-					</div>
+					{/* Progress Steps - Only show for onboarding */}
+					{mode === "onboarding" && (
+						<div className="flex items-center gap-2 mt-4 overflow-x-auto pb-2">
+							{onboardingSteps.map((step, index) => (
+								<div
+									key={`step-${step.id}-${index}`}
+									className={cn(
+										"flex items-center gap-2 px-3 py-2 rounded-full text-xs font-medium whitespace-nowrap transition-all",
+										index <= currentStep
+											? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
+											: "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
+									)}
+								>
+									{index < currentStep ? (
+										<CheckCircle className="h-3 w-3" />
+									) : index === currentStep ? (
+										<div className="h-3 w-3 bg-blue-500 rounded-full animate-pulse" />
+									) : (
+										<div className="h-3 w-3 bg-gray-300 rounded-full" />
+									)}
+									<span>{step.title}</span>
+								</div>
+							))}
+						</div>
+					)}
 				</CardHeader>
 
 				<CardContent className="p-0 h-[calc(90vh-180px)] flex flex-col">
@@ -483,40 +758,69 @@ export function AIOnboardingFlow({
 							<MessageBubble key={message.id} message={message} />
 						))}
 
-						{isTyping && (
-							<div className="flex items-center gap-2 text-sm text-muted-foreground">
-								<Bot className="h-4 w-4" />
-								<div className="flex gap-1">
-									<div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-									<div
-										className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-										style={{ animationDelay: "0.1s" }}
-									/>
-									<div
-										className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-										style={{ animationDelay: "0.2s" }}
-									/>
+						{/* Typing Indicator */}
+						{isTyping && <TypingIndicator aiName="AI Assistant" />}
+
+						{/* Research Indicator */}
+						{isResearching && (
+							<div className="flex items-center justify-center p-8">
+								<div className="text-center space-y-3">
+									<div className="flex items-center gap-2 justify-center">
+										<Search className="h-6 w-6 animate-pulse text-blue-500" />
+										<Brain className="h-6 w-6 animate-pulse text-purple-500" />
+									</div>
+									<p className="text-sm text-muted-foreground">
+										Researching latest best practices for
+										your goals...
+									</p>
+									<div className="flex justify-center gap-1">
+										<div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" />
+										<div
+											className="w-2 h-2 bg-purple-500 rounded-full animate-bounce"
+											style={{ animationDelay: "0.1s" }}
+										/>
+										<div
+											className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
+											style={{ animationDelay: "0.2s" }}
+										/>
+									</div>
 								</div>
 							</div>
 						)}
 
+						{/* Generation Indicator */}
 						{isGenerating && (
 							<div className="flex items-center justify-center p-8">
 								<div className="text-center space-y-3">
 									<Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-500" />
 									<p className="text-sm text-muted-foreground">
-										Generating your personalized schedule...
+										{mode === "onboarding"
+											? "Generating your personalized schedule..."
+											: "Analyzing and optimizing your schedule..."}
 									</p>
+									<div className="flex justify-center gap-1">
+										<div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+										<div
+											className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"
+											style={{ animationDelay: "0.2s" }}
+										/>
+										<div
+											className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"
+											style={{ animationDelay: "0.4s" }}
+										/>
+									</div>
 								</div>
 							</div>
 						)}
 
+						{/* Generated Schedule Preview */}
 						{generatedSchedule && (
 							<SchedulePreview
 								schedule={generatedSchedule}
 								onAccept={handleAcceptSchedule}
 								onRegenerate={handleRegenerateSchedule}
 								isRegenerating={isGenerating}
+								mode={mode}
 							/>
 						)}
 
@@ -545,7 +849,7 @@ export function AIOnboardingFlow({
 											onClick={() =>
 												handleQuickResponse(suggestion)
 											}
-											className="text-xs"
+											className="text-xs hover:bg-primary/10 transition-colors"
 										>
 											{suggestion}
 										</Button>
@@ -556,7 +860,7 @@ export function AIOnboardingFlow({
 
 					{/* Input Area */}
 					{!generatedSchedule && (
-						<div className="border-t p-4">
+						<div className="border-t p-4 bg-white dark:bg-gray-950">
 							<div className="flex gap-2">
 								<Input
 									value={currentInput}
@@ -570,18 +874,28 @@ export function AIOnboardingFlow({
 											handleSendMessage();
 										}
 									}}
-									disabled={isTyping || isGenerating}
+									disabled={
+										isTyping ||
+										isGenerating ||
+										isResearching
+									}
+									className="flex-1"
 								/>
 								<Button
 									onClick={handleSendMessage}
 									disabled={
 										!currentInput.trim() ||
 										isTyping ||
-										isGenerating
+										isGenerating ||
+										isResearching
 									}
+									className="px-6"
 								>
 									<Send className="h-4 w-4" />
 								</Button>
+							</div>
+							<div className="text-xs text-muted-foreground mt-2 text-center">
+								Press Enter to send • Shift+Enter for new line
 							</div>
 						</div>
 					)}
@@ -591,63 +905,13 @@ export function AIOnboardingFlow({
 	);
 }
 
-// Message Bubble Component
-interface MessageBubbleProps {
-	message: Message;
-}
-
-function MessageBubble({ message }: MessageBubbleProps) {
-	const isUser = message.type === "user";
-	const isSystem = message.type === "system";
-
-	if (isSystem) {
-		return (
-			<div className="flex items-center justify-center">
-				<div className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-4 py-2 rounded-full text-sm flex items-center gap-2">
-					<Loader2 className="h-3 w-3 animate-spin" />
-					{message.content}
-				</div>
-			</div>
-		);
-	}
-
-	return (
-		<div
-			className={cn(
-				"flex gap-3",
-				isUser ? "justify-end" : "justify-start"
-			)}
-		>
-			{!isUser && (
-				<div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center flex-shrink-0">
-					<Bot className="h-4 w-4 text-white" />
-				</div>
-			)}
-			<div
-				className={cn(
-					"max-w-[70%] p-3 rounded-lg",
-					isUser
-						? "bg-blue-500 text-white"
-						: "bg-gray-100 dark:bg-gray-800 text-foreground"
-				)}
-			>
-				<p className="text-sm whitespace-pre-wrap">{message.content}</p>
-			</div>
-			{isUser && (
-				<div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center flex-shrink-0">
-					<User className="h-4 w-4 text-gray-600" />
-				</div>
-			)}
-		</div>
-	);
-}
-
-// Schedule Preview Component
+// Enhanced Schedule Preview Component
 interface SchedulePreviewProps {
 	schedule: GeneratedSchedule;
 	onAccept: () => void;
 	onRegenerate: () => void;
 	isRegenerating: boolean;
+	mode: "onboarding" | "assistant";
 }
 
 function SchedulePreview({
@@ -655,6 +919,7 @@ function SchedulePreview({
 	onAccept,
 	onRegenerate,
 	isRegenerating,
+	mode,
 }: SchedulePreviewProps) {
 	const [activeTab, setActiveTab] = useState<"preview" | "insights">(
 		"preview"
@@ -671,13 +936,15 @@ function SchedulePreview({
 	const groupedTasks = groupTasksByBlock(schedule.tasks);
 
 	return (
-		<Card className="border-2 border-blue-200 dark:border-blue-800">
+		<Card className="border-2 border-blue-200 dark:border-blue-800 animate-in fade-in slide-in-from-bottom-4 duration-500">
 			<CardHeader>
 				<div className="flex items-center justify-between">
 					<div className="flex items-center gap-2">
 						<Calendar className="h-5 w-5 text-blue-500" />
 						<CardTitle className="text-lg">
-							Your Personalized Schedule
+							{mode === "onboarding"
+								? "Your Personalized Schedule"
+								: "Optimized Schedule"}
 						</CardTitle>
 					</div>
 					<div className="flex gap-1">
@@ -710,7 +977,7 @@ function SchedulePreview({
 						{/* Schedule Overview */}
 						<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 							{/* Morning Block */}
-							<div className="border-l-4 border-l-yellow-500 bg-yellow-50 dark:bg-yellow-950 rounded-lg p-3">
+							<div className="border-l-4 border-l-yellow-500 bg-yellow-50 dark:bg-yellow-950 rounded-lg p-3 transition-all hover:shadow-md">
 								<h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
 									<Clock className="h-4 w-4" />
 									Morning Block
@@ -729,11 +996,16 @@ function SchedulePreview({
 											</div>
 										</div>
 									))}
+									{groupedTasks.morning.length === 0 && (
+										<div className="text-xs text-muted-foreground italic">
+											No morning tasks
+										</div>
+									)}
 								</div>
 							</div>
 
 							{/* Afternoon Block */}
-							<div className="border-l-4 border-l-blue-500 bg-blue-50 dark:bg-blue-950 rounded-lg p-3">
+							<div className="border-l-4 border-l-blue-500 bg-blue-50 dark:bg-blue-950 rounded-lg p-3 transition-all hover:shadow-md">
 								<h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
 									<Clock className="h-4 w-4" />
 									Afternoon Block
@@ -754,11 +1026,16 @@ function SchedulePreview({
 											</div>
 										)
 									)}
+									{groupedTasks.afternoon.length === 0 && (
+										<div className="text-xs text-muted-foreground italic">
+											No afternoon tasks
+										</div>
+									)}
 								</div>
 							</div>
 
 							{/* Evening Block */}
-							<div className="border-l-4 border-l-purple-500 bg-purple-50 dark:bg-purple-950 rounded-lg p-3">
+							<div className="border-l-4 border-l-purple-500 bg-purple-50 dark:bg-purple-950 rounded-lg p-3 transition-all hover:shadow-md">
 								<h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
 									<Clock className="h-4 w-4" />
 									Evening Block
@@ -777,14 +1054,19 @@ function SchedulePreview({
 											</div>
 										</div>
 									))}
+									{groupedTasks.evening.length === 0 && (
+										<div className="text-xs text-muted-foreground italic">
+											No evening tasks
+										</div>
+									)}
 								</div>
 							</div>
 						</div>
 
 						{/* Schedule Stats */}
-						<div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
+						<div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 border">
 							<div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-								<div>
+								<div className="transition-all hover:scale-105">
 									<div className="text-lg font-bold text-blue-600">
 										{schedule.tasks.length}
 									</div>
@@ -792,7 +1074,7 @@ function SchedulePreview({
 										Total Tasks
 									</div>
 								</div>
-								<div>
+								<div className="transition-all hover:scale-105">
 									<div className="text-lg font-bold text-green-600">
 										{schedule.tasks.reduce(
 											(sum, task) => sum + task.duration,
@@ -804,7 +1086,7 @@ function SchedulePreview({
 										Scheduled Time
 									</div>
 								</div>
-								<div>
+								<div className="transition-all hover:scale-105">
 									<div className="text-lg font-bold text-purple-600">
 										{
 											new Set(
@@ -818,7 +1100,7 @@ function SchedulePreview({
 										Categories
 									</div>
 								</div>
-								<div>
+								<div className="transition-all hover:scale-105">
 									<div className="text-lg font-bold text-orange-600">
 										{
 											schedule.tasks.filter((t) =>
@@ -841,13 +1123,13 @@ function SchedulePreview({
 						<div>
 							<h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
 								<Target className="h-4 w-4 text-blue-500" />
-								Schedule Insights
+								AI-Generated Insights
 							</h4>
 							<div className="space-y-2">
 								{schedule.insights.map((insight, index) => (
 									<div
 										key={`insight-${index}`}
-										className="flex items-start gap-2 text-sm"
+										className="flex items-start gap-2 text-sm p-2 bg-blue-50 dark:bg-blue-950 rounded-md transition-all hover:bg-blue-100 dark:hover:bg-blue-900"
 									>
 										<CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0 mt-0.5" />
 										<span>{insight}</span>
@@ -860,13 +1142,13 @@ function SchedulePreview({
 						<div>
 							<h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
 								<Lightbulb className="h-4 w-4 text-yellow-500" />
-								Recommendations
+								AI Recommendations
 							</h4>
 							<div className="space-y-2">
 								{schedule.recommendations.map((rec, index) => (
 									<div
 										key={`recommendation-${index}`}
-										className="flex items-start gap-2 text-sm"
+										className="flex items-start gap-2 text-sm p-2 bg-yellow-50 dark:bg-yellow-950 rounded-md transition-all hover:bg-yellow-100 dark:hover:bg-yellow-900"
 									>
 										<ChevronRight className="h-4 w-4 text-blue-500 flex-shrink-0 mt-0.5" />
 										<span>{rec}</span>
@@ -881,16 +1163,19 @@ function SchedulePreview({
 				<div className="flex gap-2 pt-4 border-t">
 					<Button
 						onClick={onAccept}
-						className="flex-1"
+						className="flex-1 transition-all hover:scale-105"
 						disabled={isRegenerating}
 					>
 						<CheckCircle className="h-4 w-4 mr-2" />
-						Use This Schedule
+						{mode === "onboarding"
+							? "Use This Schedule"
+							: "Apply Changes"}
 					</Button>
 					<Button
 						variant="outline"
 						onClick={onRegenerate}
 						disabled={isRegenerating}
+						className="transition-all hover:scale-105"
 					>
 						{isRegenerating ? (
 							<Loader2 className="h-4 w-4 animate-spin" />
@@ -901,7 +1186,7 @@ function SchedulePreview({
 				</div>
 
 				{/* Help Text */}
-				<div className="text-xs text-muted-foreground bg-blue-50 dark:bg-blue-950 p-3 rounded-lg">
+				<div className="text-xs text-muted-foreground bg-blue-50 dark:bg-blue-950 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
 					💡 <strong>Tip:</strong> You can further customize this
 					schedule after accepting it using the schedule customization
 					tools.

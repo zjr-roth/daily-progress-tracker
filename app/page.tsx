@@ -1,4 +1,4 @@
-// app/page.tsx - Updated to include Smart Scheduling Assistant
+// app/page.tsx - Updated to support AI Assistant mode
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -23,7 +23,6 @@ import { AnalysisSection } from "./components/AnalysisSection";
 import { StreakStats } from "./components/StreakStats";
 import { ScheduleCustomization } from "./components/ScheduleCustomization";
 import { AIOnboardingFlow } from "./components/AIOnboardingFlow";
-/* import { SmartSchedulingAssistant } from "./components/SmartSchedulingAssistant"; */
 import { Button } from "./components/ui/button";
 import { Card, CardContent } from "./components/ui/card";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
@@ -98,7 +97,9 @@ function DashboardContent() {
 	// Local state for UI
 	const [showCustomization, setShowCustomization] = useState(false);
 	const [showAIOnboarding, setShowAIOnboarding] = useState(false);
-	const [showSmartAssistant, setShowSmartAssistant] = useState(false);
+	const [aiMode, setAiMode] = useState<"onboarding" | "assistant">(
+		"onboarding"
+	);
 	const [isNewUser, setIsNewUser] = useState(false);
 	const [timeConflictAlert, setTimeConflictAlert] = useState<{
 		show: boolean;
@@ -117,6 +118,7 @@ function DashboardContent() {
 			// Show AI onboarding for new users after a brief delay
 			const timer = setTimeout(() => {
 				setIsNewUser(true);
+				setAiMode("onboarding");
 				setShowAIOnboarding(true);
 			}, 1000);
 			return () => clearTimeout(timer);
@@ -227,12 +229,14 @@ function DashboardContent() {
 		}
 	};
 
-	// Handle smart assistant time slot selection
-	const handleTimeSlotSelect = (timeSlot: string, timeBlock: string) => {
-		setShowSmartAssistant(false);
-		setShowCustomization(true);
-		// You could pre-fill the task creation form with the selected time slot
-		showToast(`Selected ${timeSlot} in ${timeBlock} block`, "success");
+	const handleAIAssistantClick = () => {
+		setAiMode("assistant");
+		setShowAIOnboarding(true);
+	};
+
+	const handleNewUserOnboardingClick = () => {
+		setAiMode("onboarding");
+		setShowAIOnboarding(true);
 	};
 
 	const showToast = (
@@ -362,7 +366,6 @@ function DashboardContent() {
 															: ""
 													}`}
 													onClick={() => {
-														// Could auto-fill the form with this time
 														setTimeConflictAlert({
 															show: false,
 															message: "",
@@ -406,192 +409,175 @@ function DashboardContent() {
 				</div>
 			)}
 
-			{/* Main Layout with Smart Assistant */}
+			{/* Main Layout */}
 			<div className="flex flex-col gap-6 mb-8">
-				{/* Left Column - Main Content */}
-				<div className="xl:col-span-3 space-y-8">
-					{/* Date Selection and Progress Overview */}
-					<Card>
-						<CardContent className="p-6">
-							<div className="mb-6">
-								<DateSelector
-									currentDate={currentDate}
-									onDateChange={setCurrentDate}
-									onGoToToday={goToToday}
+				{/* Date Selection and Progress Overview */}
+				<Card>
+					<CardContent className="p-6">
+						<div className="mb-6">
+							<DateSelector
+								currentDate={currentDate}
+								onDateChange={setCurrentDate}
+								onGoToToday={goToToday}
+							/>
+						</div>
+
+						<div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-center">
+							{/* Progress Circle */}
+							<div className="flex items-center gap-4">
+								<ProgressCircle
+									percentage={
+										dateProgress.completionPercentage
+									}
 								/>
-							</div>
-
-							<div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-center">
-								{/* Progress Circle */}
-								<div className="flex items-center gap-4">
-									<ProgressCircle
-										percentage={
-											dateProgress.completionPercentage
+								<div>
+									<h3 className="text-xl font-semibold mb-1">
+										Progress for{" "}
+										{
+											formatDisplayDate(
+												currentDate
+											).split(",")[0]
 										}
-									/>
-									<div>
-										<h3 className="text-xl font-semibold mb-1">
-											Progress for{" "}
-											{
-												formatDisplayDate(
-													currentDate
-												).split(",")[0]
-											}
-										</h3>
-										<p className="text-muted-foreground">
-											{completedTasks} of {tasks.length}{" "}
-											tasks completed
+									</h3>
+									<p className="text-muted-foreground">
+										{completedTasks} of {tasks.length} tasks
+										completed
+									</p>
+									{loading && (
+										<p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+											<Loader2 className="h-3 w-3 animate-spin" />
+											Syncing...
 										</p>
-										{loading && (
-											<p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-												<Loader2 className="h-3 w-3 animate-spin" />
-												Syncing...
-											</p>
-										)}
-									</div>
-								</div>
-
-								{/* Category Stats */}
-								<div className="lg:col-span-2">
-									{tasks.length > 0 ? (
-										<CategoryStats stats={categoryStats} />
-									) : (
-										<div className="text-center py-8 text-muted-foreground">
-											<p className="text-lg mb-2">
-												No tasks yet!
-											</p>
-											<p className="text-sm">
-												Create your first schedule to
-												get started
-											</p>
-										</div>
 									)}
 								</div>
 							</div>
-						</CardContent>
-					</Card>
 
-					{/* Task Lists or Empty State */}
-					{tasks.length > 0 ? (
-						<section>
-							<div className="flex justify-between items-center mb-6">
-								<h2 className="text-2xl font-semibold">
-									Daily Schedule & Tasks
-								</h2>
-								<div className="flex items-center gap-4">
-									<div className="text-sm text-muted-foreground">
-										Double-click any task to edit • Hover to
-										see edit button
+							{/* Category Stats */}
+							<div className="lg:col-span-2">
+								{tasks.length > 0 ? (
+									<CategoryStats stats={categoryStats} />
+								) : (
+									<div className="text-center py-8 text-muted-foreground">
+										<p className="text-lg mb-2">
+											No tasks yet!
+										</p>
+										<p className="text-sm">
+											Create your first schedule to get
+											started
+										</p>
 									</div>
-									<div className="flex gap-2">
+								)}
+							</div>
+						</div>
+					</CardContent>
+				</Card>
+
+				{/* Task Lists or Empty State */}
+				{tasks.length > 0 ? (
+					<section>
+						<div className="flex justify-between items-center mb-6">
+							<h2 className="text-2xl font-semibold">
+								Daily Schedule & Tasks
+							</h2>
+							<div className="flex items-center gap-4">
+								<div className="text-sm text-muted-foreground">
+									Double-click any task to edit • Hover to see
+									edit button
+								</div>
+								<div className="flex gap-2">
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={() =>
+											setShowCustomization(true)
+										}
+									>
+										<Settings className="h-4 w-4 mr-2" />
+										Customize
+									</Button>
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={handleAIAssistantClick}
+									>
+										<Brain className="h-4 w-4 mr-2" />
+										AI Assistant
+									</Button>
+								</div>
+							</div>
+						</div>
+						<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+							<TaskList
+								tasks={tasks}
+								timeBlock="morning"
+								isTaskCompleted={(taskId) =>
+									isTaskCompleted(taskId, currentDate)
+								}
+								onTaskToggle={handleTaskToggle}
+								onTaskEdit={handleTaskEdit}
+								onTaskDelete={handleTaskDelete}
+							/>
+							<TaskList
+								tasks={tasks}
+								timeBlock="afternoon"
+								isTaskCompleted={(taskId) =>
+									isTaskCompleted(taskId, currentDate)
+								}
+								onTaskToggle={handleTaskToggle}
+								onTaskEdit={handleTaskEdit}
+								onTaskDelete={handleTaskDelete}
+							/>
+							<TaskList
+								tasks={tasks}
+								timeBlock="evening"
+								isTaskCompleted={(taskId) =>
+									isTaskCompleted(taskId, currentDate)
+								}
+								onTaskToggle={handleTaskToggle}
+								onTaskEdit={handleTaskEdit}
+								onTaskDelete={handleTaskDelete}
+							/>
+						</div>
+					</section>
+				) : (
+					<section>
+						<Card>
+							<CardContent className="p-12 text-center">
+								<div className="max-w-md mx-auto">
+									<div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+										<Plus className="h-8 w-8 text-primary" />
+									</div>
+									<h3 className="text-xl font-semibold mb-2">
+										Ready to get organized?
+									</h3>
+									<p className="text-muted-foreground mb-6">
+										Create your personalized daily schedule
+										to start tracking your productivity
+									</p>
+									<div className="flex gap-3 justify-center">
+										<Button
+											onClick={
+												handleNewUserOnboardingClick
+											}
+										>
+											<Sparkles className="h-4 w-4 mr-2" />
+											Create with AI
+										</Button>
 										<Button
 											variant="outline"
-											size="sm"
 											onClick={() =>
 												setShowCustomization(true)
 											}
 										>
-											<Settings className="h-4 w-4 mr-2" />
-											Customize
-										</Button>
-										<Button
-											variant="outline"
-											size="sm"
-											onClick={() =>
-												setShowAIOnboarding(true)
-											}
-										>
-											<Sparkles className="h-4 w-4 mr-2" />
-											AI Assistant
+											<Plus className="h-4 w-4 mr-2" />
+											Add Manually
 										</Button>
 									</div>
 								</div>
-							</div>
-							<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-								<TaskList
-									tasks={tasks}
-									timeBlock="morning"
-									isTaskCompleted={(taskId) =>
-										isTaskCompleted(taskId, currentDate)
-									}
-									onTaskToggle={handleTaskToggle}
-									onTaskEdit={handleTaskEdit}
-									onTaskDelete={handleTaskDelete}
-								/>
-								<TaskList
-									tasks={tasks}
-									timeBlock="afternoon"
-									isTaskCompleted={(taskId) =>
-										isTaskCompleted(taskId, currentDate)
-									}
-									onTaskToggle={handleTaskToggle}
-									onTaskEdit={handleTaskEdit}
-									onTaskDelete={handleTaskDelete}
-								/>
-								<TaskList
-									tasks={tasks}
-									timeBlock="evening"
-									isTaskCompleted={(taskId) =>
-										isTaskCompleted(taskId, currentDate)
-									}
-									onTaskToggle={handleTaskToggle}
-									onTaskEdit={handleTaskEdit}
-									onTaskDelete={handleTaskDelete}
-								/>
-							</div>
-						</section>
-					) : (
-						<section>
-							<Card>
-								<CardContent className="p-12 text-center">
-									<div className="max-w-md mx-auto">
-										<div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-											<Plus className="h-8 w-8 text-primary" />
-										</div>
-										<h3 className="text-xl font-semibold mb-2">
-											Ready to get organized?
-										</h3>
-										<p className="text-muted-foreground mb-6">
-											Create your personalized daily
-											schedule to start tracking your
-											productivity
-										</p>
-										<div className="flex gap-3 justify-center">
-											<Button
-												onClick={() =>
-													setShowAIOnboarding(true)
-												}
-											>
-												<Sparkles className="h-4 w-4 mr-2" />
-												Create with AI
-											</Button>
-											<Button
-												variant="outline"
-												onClick={() =>
-													setShowCustomization(true)
-												}
-											>
-												<Plus className="h-4 w-4 mr-2" />
-												Add Manually
-											</Button>
-										</div>
-									</div>
-								</CardContent>
-							</Card>
-						</section>
-					)}
-				</div>
-
-				{/* Right Column - Smart Assistant */}
-				{/* 	{tasks.length > 0 && user?.id && (
-					<div className="xl:col-span-1">
-						<SmartSchedulingAssistant
-							userId={user.id}
-							currentDate={currentDate}
-							onTimeSlotSelect={handleTimeSlotSelect}
-						/>
-					</div>
-				)} */}
+							</CardContent>
+						</Card>
+					</section>
+				)}
 			</div>
 
 			{/* Progress Chart - Only show if there's progress data */}
@@ -658,32 +644,13 @@ function DashboardContent() {
 
 			{showAIOnboarding && (
 				<AIOnboardingFlow
+					mode={aiMode}
+					currentTasks={tasks}
 					onScheduleGenerated={handleScheduleGenerated}
 					onClose={() => setShowAIOnboarding(false)}
 					userName={user?.user_metadata.full_name || ""}
 				/>
 			)}
-
-			{/* {showSmartAssistant && (
-				<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-					<div className="w-full max-w-2xl max-h-[90vh] overflow-hidden">
-						<SmartSchedulingAssistant
-							userId={user?.id || ""}
-							currentDate={currentDate}
-							onTimeSlotSelect={handleTimeSlotSelect}
-							className="bg-background"
-						/>
-						<div className="bg-background border-t p-4 flex justify-end">
-							<Button
-								variant="outline"
-								onClick={() => setShowSmartAssistant(false)}
-							>
-								Close
-							</Button>
-						</div>
-					</div>
-				</div>
-			)} */}
 		</div>
 	);
 }
