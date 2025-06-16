@@ -2,18 +2,18 @@ export interface Task {
   id: string;
   name: string;
   time: string;
-  category: TaskCategory;
+  category: string;
   duration: number;
   block: TimeBlock;
 }
 
-export type TaskCategory = 'Study' | 'Research' | 'Personal' | 'Dog Care';
+export type TaskCategory = string; // Now dynamic from database
 export type TimeBlock = 'morning' | 'afternoon' | 'evening';
 
 export interface DayProgress {
   completionPercentage: number;
-  incompleteTasks: string[]; // Task names (kept for backward compatibility)
-  incompleteTaskIds?: string[]; // Task IDs (new field for accurate tracking)
+  incompleteTasks: string[];
+  incompleteTaskIds?: string[];
 }
 
 export interface ProgressData {
@@ -35,25 +35,31 @@ export interface StreakData {
   totalDays: number;
 }
 
-export interface UsersData {
-  id: string;
-  created_at: string;
-  updated_at: string;
-  email: string;
-  full_name: string;
-}
-
-export interface DailyData {
+export interface DatabaseTask {
   id: string;
   user_id: string;
-  date: string;
-  tasks: any[];
-  schedule_items: any[];
-  progress_metrics: Record<string, any>;
-  completion_status: Record<string, any>;
-  completion_percentage: number;
-  incomplete_tasks: string[];
-  incomplete_task_ids?: string[]; // New field for task IDs
+  name: string;
+  time_start: string;
+  time_end: string;
+  category_id: string | null;
+  duration: number;
+  time_block: TimeBlock;
+  position: number;
+  is_active: boolean;
   created_at: string;
   updated_at: string;
+  categories?: {
+    id: string;
+    name: string;
+    color: string;
+    bg_color: string;
+    text_color: string;
+  };
+}
+
+export interface TimeSlot {
+  start_time: string;
+  end_time: string;
+  duration_minutes: number;
+  time_block: TimeBlock;
 }

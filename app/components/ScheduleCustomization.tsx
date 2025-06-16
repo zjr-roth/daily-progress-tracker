@@ -1,7 +1,8 @@
+// app/components/ScheduleCustomization.tsx - Updated for database integration
 "use client";
 
 import React, { useState, useRef } from "react";
-import { Task, TaskCategory, TimeBlock } from "../lib/types";
+import { Task, TimeBlock } from "../lib/types";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -18,48 +19,31 @@ import {
 	Palette,
 	AlertCircle,
 	Tag,
+	Loader2,
 } from "lucide-react";
 import { cn } from "../lib/utils";
+import { Category } from "../lib/services/categoryService";
+import { validateTaskTime, suggestAlternativeTimeSlots } from "../lib/utils";
 
 interface ScheduleCustomizationProps {
 	tasks: Task[];
-	onTasksUpdate: (tasks: Task[]) => void;
+	categories: Category[];
+	onTaskCreate: (task: Omit<Task, "id">) => Promise<Task | null>;
+	onTaskUpdate: (
+		taskId: string,
+		updates: Partial<Task>
+	) => Promise<Task | null>;
+	onTaskDelete: (taskId: string) => Promise<void>;
+	onCategoryCreate: (
+		category: Omit<Category, "id">
+	) => Promise<Category | null>;
+	onCategoryUpdate: (
+		categoryId: string,
+		updates: Partial<Category>
+	) => Promise<Category | null>;
+	onCategoryDelete: (categoryId: string) => Promise<void>;
 	onClose: () => void;
 }
-
-interface CategoryConfig {
-	name: string;
-	color: string;
-	bgColor: string;
-	textColor: string;
-}
-
-const defaultCategories: Record<string, CategoryConfig> = {
-	Study: {
-		name: "Study",
-		color: "bg-blue-500",
-		bgColor: "bg-blue-100 dark:bg-blue-900",
-		textColor: "text-blue-800 dark:text-blue-200",
-	},
-	Research: {
-		name: "Research",
-		color: "bg-green-500",
-		bgColor: "bg-green-100 dark:bg-green-900",
-		textColor: "text-green-800 dark:text-green-200",
-	},
-	Personal: {
-		name: "Personal",
-		color: "bg-purple-500",
-		bgColor: "bg-purple-100 dark:bg-purple-900",
-		textColor: "text-purple-800 dark:text-purple-200",
-	},
-	"Dog Care": {
-		name: "Dog Care",
-		color: "bg-orange-500",
-		bgColor: "bg-orange-100 dark:bg-orange-900",
-		textColor: "text-orange-800 dark:text-orange-200",
-	},
-};
 
 const colorOptions = [
 	{
@@ -132,25 +116,30 @@ const timeBlocks: { key: TimeBlock; title: string; color: string }[] = [
 
 export function ScheduleCustomization({
 	tasks,
-	onTasksUpdate,
+	categories,
+	onTaskCreate,
+	onTaskUpdate,
+	onTaskDelete,
+	onCategoryCreate,
+	onCategoryUpdate,
+	onCategoryDelete,
 	onClose,
 }: ScheduleCustomizationProps) {
-	const [localTasks, setLocalTasks] = useState<Task[]>([...tasks]);
-	const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
-	const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
-	const [categories, setCategories] =
-		useState<Record<string, CategoryConfig>>(defaultCategories);
 	const [activeTab, setActiveTab] = useState<"tasks" | "categories">("tasks");
 	const [showAddTask, setShowAddTask] = useState(false);
 	const [showAddCategory, setShowAddCategory] = useState(false);
-	const [editingCategory, setEditingCategory] = useState<string | null>(null);
-	const dragCounter = useRef(0);
+	const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+	const [editingCategoryId, setEditingCategoryId] = useState<string | null>(
+		null
+	);
+	const [loading, setLoading] = useState(false);
+	const [error, setError] = useState<string | null>(null);
 
 	// New task form state
 	const [newTask, setNewTask] = useState({
 		name: "",
 		time: "",
-		category: "Personal" as string,
+		category: categories.length > 0 ? categories[0].name : "Personal",
 		duration: 30,
 		block: "morning" as TimeBlock,
 	});
@@ -163,19 +152,36 @@ export function ScheduleCustomization({
 		textColor: "text-blue-800 dark:text-blue-200",
 	});
 
-	// Helper functions
-	const generateUniqueId = () =>
-		`${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+	// Time conflict alert state
+	const [timeConflictAlert, setTimeConflictAlert] = useState<{
+		show: boolean;
+		message: string;
+		suggestions: Array<{ start: string; end: string }>;
+	}>({ show: false, message: "", suggestions: [] });
 
-	const getCategoryConfig = (category: string) => {
-		return categories[category] || defaultCategories["Personal"];
+	// Helper functions
+	const getCategoryConfig = (categoryName: string) => {
+		const category = categories.find((cat) => cat.name === categoryName);
+		if (!category) {
+			// Return default if category not found
+			return {
+				color: "bg-gray-500",
+				bgColor: "bg-gray-100 dark:bg-gray-900",
+				textColor: "text-gray-800 dark:text-gray-200",
+			};
+		}
+		return {
+			color: category.color,
+			bgColor: category.bgColor,
+			textColor: category.textColor,
+		};
 	};
 
 	const resetNewTask = () => {
 		setNewTask({
 			name: "",
 			time: "",
-			category: "Personal",
+			category: categories.length > 0 ? categories[0].name : "Personal",
 			duration: 30,
 			block: "morning",
 		});
@@ -190,93 +196,215 @@ export function ScheduleCustomization({
 		});
 	};
 
+	const showToast = (
+		message: string,
+		type: "success" | "error" = "success"
+	) => {
+		// Create a simple toast notification
+		const toast = document.createElement("div");
+		const bgColor =
+			type === "success"
+				? "bg-green-100 border-green-200 text-green-700"
+				: "bg-red-100 border-red-200 text-red-700";
+
+		toast.className = `fixed top-4 right-4 ${bgColor} border px-4 py-3 rounded-lg shadow-lg z-50 max-w-sm`;
+		toast.textContent = message;
+		document.body.appendChild(toast);
+
+		setTimeout(() => {
+			if (document.body.contains(toast)) {
+				document.body.removeChild(toast);
+			}
+		}, 3000);
+	};
+
 	// Task management functions
-	const handleAddTask = () => {
+	const handleAddTask = async () => {
 		if (!newTask.name.trim() || !newTask.time.trim()) {
+			setError("Task name and time are required");
 			return;
 		}
 
-		const task: Task = {
-			id: `task-${generateUniqueId()}`,
-			name: newTask.name,
-			time: newTask.time,
-			category: newTask.category as TaskCategory,
-			duration: newTask.duration,
-			block: newTask.block,
-		};
+		// Validate time format and check for conflicts
+		const validation = validateTaskTime(
+			newTask.time,
+			newTask.duration,
+			tasks
+		);
 
-		setLocalTasks([...localTasks, task]);
-		resetNewTask();
-		setShowAddTask(false);
-	};
+		if (!validation.isValid) {
+			const suggestions = suggestAlternativeTimeSlots(
+				newTask.time,
+				newTask.duration,
+				newTask.block,
+				tasks
+			);
 
-	const handleDeleteTask = (taskId: string) => {
-		if (window.confirm("Are you sure you want to delete this task?")) {
-			setLocalTasks(localTasks.filter((t) => t.id !== taskId));
+			setTimeConflictAlert({
+				show: true,
+				message: validation.error || "Time conflict detected",
+				suggestions,
+			});
+			return;
+		}
+
+		setLoading(true);
+		setError(null);
+
+		try {
+			const taskData: Omit<Task, "id"> = {
+				name: newTask.name,
+				time: newTask.time,
+				category: newTask.category,
+				duration: newTask.duration,
+				block: newTask.block,
+			};
+
+			await onTaskCreate(taskData);
+			resetNewTask();
+			setShowAddTask(false);
+			showToast("Task created successfully!");
+		} catch (error: any) {
+			setError(error.message || "Failed to create task");
+			showToast(error.message || "Failed to create task", "error");
+		} finally {
+			setLoading(false);
 		}
 	};
 
-	const handleTaskEdit = (taskId: string, updatedTask: Partial<Task>) => {
-		setLocalTasks(
-			localTasks.map((task) =>
-				task.id === taskId ? { ...task, ...updatedTask } : task
-			)
-		);
-		setEditingTaskId(null);
+	const handleTaskEdit = async (
+		taskId: string,
+		updatedTask: Partial<Task>
+	) => {
+		if (updatedTask.time) {
+			// Validate time if it's being updated
+			const validation = validateTaskTime(
+				updatedTask.time,
+				updatedTask.duration || 0,
+				tasks,
+				taskId
+			);
+
+			if (!validation.isValid) {
+				const task = tasks.find((t) => t.id === taskId);
+				if (task) {
+					const suggestions = suggestAlternativeTimeSlots(
+						updatedTask.time,
+						updatedTask.duration || task.duration,
+						updatedTask.block || task.block,
+						tasks
+					);
+
+					setTimeConflictAlert({
+						show: true,
+						message: validation.error || "Time conflict detected",
+						suggestions,
+					});
+				}
+				return;
+			}
+		}
+
+		setLoading(true);
+		setError(null);
+
+		try {
+			await onTaskUpdate(taskId, updatedTask);
+			setEditingTaskId(null);
+			showToast("Task updated successfully!");
+		} catch (error: any) {
+			setError(error.message || "Failed to update task");
+			showToast(error.message || "Failed to update task", "error");
+		} finally {
+			setLoading(false);
+		}
 	};
 
-	// Drag and drop functions
-	const handleDragStart = (e: React.DragEvent, taskId: string) => {
-		setDraggedTaskId(taskId);
-		e.dataTransfer.effectAllowed = "move";
-	};
+	const handleTaskDelete = async (taskId: string) => {
+		if (!window.confirm("Are you sure you want to delete this task?")) {
+			return;
+		}
 
-	const handleDragOver = (e: React.DragEvent) => {
-		e.preventDefault();
-		e.dataTransfer.dropEffect = "move";
-	};
+		setLoading(true);
+		setError(null);
 
-	const handleDrop = (e: React.DragEvent, targetBlock: TimeBlock) => {
-		e.preventDefault();
-
-		if (!draggedTaskId) return;
-
-		setLocalTasks(
-			localTasks.map((task) =>
-				task.id === draggedTaskId
-					? { ...task, block: targetBlock }
-					: task
-			)
-		);
-
-		setDraggedTaskId(null);
-		dragCounter.current = 0;
+		try {
+			await onTaskDelete(taskId);
+			showToast("Task deleted successfully!");
+		} catch (error: any) {
+			setError(error.message || "Failed to delete task");
+			showToast(error.message || "Failed to delete task", "error");
+		} finally {
+			setLoading(false);
+		}
 	};
 
 	// Category management functions
-	const handleAddCategory = () => {
+	const handleAddCategory = async () => {
 		if (!newCategory.name.trim()) {
+			setError("Category name is required");
 			return;
 		}
 
-		if (categories[newCategory.name]) {
-			alert("Category with this name already exists!");
+		// Check if category already exists
+		if (
+			categories.some(
+				(cat) =>
+					cat.name.toLowerCase() === newCategory.name.toLowerCase()
+			)
+		) {
+			setError("A category with this name already exists");
 			return;
 		}
 
-		const updatedCategories = {
-			...categories,
-			[newCategory.name]: { ...newCategory },
-		};
+		setLoading(true);
+		setError(null);
 
-		setCategories(updatedCategories);
-		resetNewCategory();
-		setShowAddCategory(false);
+		try {
+			const categoryData: Omit<Category, "id"> = {
+				name: newCategory.name,
+				color: newCategory.color,
+				bgColor: newCategory.bgColor,
+				textColor: newCategory.textColor,
+			};
+
+			await onCategoryCreate(categoryData);
+			resetNewCategory();
+			setShowAddCategory(false);
+			showToast("Category created successfully!");
+		} catch (error: any) {
+			setError(error.message || "Failed to create category");
+			showToast(error.message || "Failed to create category", "error");
+		} finally {
+			setLoading(false);
+		}
 	};
 
-	const handleDeleteCategory = (categoryName: string) => {
-		const tasksUsingCategory = localTasks.filter(
-			(task) => task.category === categoryName
+	const handleCategoryUpdate = async (
+		categoryId: string,
+		updates: Partial<Category>
+	) => {
+		setLoading(true);
+		setError(null);
+
+		try {
+			await onCategoryUpdate(categoryId, updates);
+			setEditingCategoryId(null);
+			showToast("Category updated successfully!");
+		} catch (error: any) {
+			setError(error.message || "Failed to update category");
+			showToast(error.message || "Failed to update category", "error");
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	const handleCategoryDelete = async (categoryId: string) => {
+		const category = categories.find((cat) => cat.id === categoryId);
+		if (!category) return;
+
+		const tasksUsingCategory = tasks.filter(
+			(task) => task.category === category.name
 		);
 
 		if (tasksUsingCategory.length > 0) {
@@ -287,62 +415,31 @@ export function ScheduleCustomization({
 			) {
 				return;
 			}
-			setLocalTasks(
-				localTasks.map((task) =>
-					task.category === categoryName
-						? { ...task, category: "Personal" as TaskCategory }
-						: task
-				)
-			);
 		}
 
-		if (defaultCategories[categoryName]) {
-			alert("Cannot delete default categories!");
-			return;
-		}
+		setLoading(true);
+		setError(null);
 
-		const updatedCategories = { ...categories };
-		delete updatedCategories[categoryName];
-		setCategories(updatedCategories);
+		try {
+			await onCategoryDelete(categoryId);
+			showToast("Category deleted successfully!");
+		} catch (error: any) {
+			setError(error.message || "Failed to delete category");
+			showToast(error.message || "Failed to delete category", "error");
+		} finally {
+			setLoading(false);
+		}
 	};
 
-	const updateCategoryColor = (
-		category: string,
+	const updateCategoryColor = async (
+		categoryId: string,
 		colorConfig: (typeof colorOptions)[0]
 	) => {
-		const updatedCategories = {
-			...categories,
-			[category]: {
-				...categories[category],
-				color: colorConfig.color,
-				bgColor: colorConfig.bg,
-				textColor: colorConfig.text,
-			},
-		};
-		setCategories(updatedCategories);
-	};
-
-	const updateCategoryName = (oldName: string, newName: string) => {
-		if (!newName.trim() || oldName === newName) {
-			setEditingCategory(null);
-			return;
-		}
-
-		if (categories[newName]) {
-			alert("Category with this name already exists!");
-			setEditingCategory(null);
-			return;
-		}
-
-		const updatedCategories = { ...categories };
-		updatedCategories[newName] = {
-			...updatedCategories[oldName],
-			name: newName,
-		};
-		delete updatedCategories[oldName];
-
-		setCategories(updatedCategories);
-		setEditingCategory(null);
+		await handleCategoryUpdate(categoryId, {
+			color: colorConfig.color,
+			bgColor: colorConfig.bg,
+			textColor: colorConfig.text,
+		});
 	};
 
 	const handleNewCategoryColorChange = (
@@ -354,12 +451,6 @@ export function ScheduleCustomization({
 			bgColor: colorConfig.bg,
 			textColor: colorConfig.text,
 		});
-	};
-
-	// Save changes
-	const handleSaveChanges = () => {
-		onTasksUpdate(localTasks);
-		onClose();
 	};
 
 	return (
@@ -390,6 +481,7 @@ export function ScheduleCustomization({
 							}
 							size="sm"
 							onClick={() => setActiveTab("tasks")}
+							disabled={loading}
 						>
 							Manage Tasks
 						</Button>
@@ -401,6 +493,7 @@ export function ScheduleCustomization({
 							}
 							size="sm"
 							onClick={() => setActiveTab("categories")}
+							disabled={loading}
 						>
 							<Palette className="h-4 w-4 mr-2" />
 							Categories
@@ -409,9 +502,103 @@ export function ScheduleCustomization({
 				</CardHeader>
 
 				<CardContent className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+					{/* Error Alert */}
+					{error && (
+						<div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+							<div className="flex items-center gap-2">
+								<AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+								<span className="text-sm text-red-800 dark:text-red-200">
+									{error}
+								</span>
+								<Button
+									variant="ghost"
+									size="sm"
+									onClick={() => setError(null)}
+									className="ml-auto"
+								>
+									<X className="h-3 w-3" />
+								</Button>
+							</div>
+						</div>
+					)}
+
+					{/* Time Conflict Alert */}
+					{timeConflictAlert.show && (
+						<div className="mb-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+							<div className="flex items-start gap-3">
+								<AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+								<div className="flex-1">
+									<h3 className="font-medium text-yellow-800 dark:text-yellow-200 mb-2">
+										Scheduling Conflict
+									</h3>
+									<p className="text-sm text-yellow-700 dark:text-yellow-300 mb-3">
+										{timeConflictAlert.message}
+									</p>
+									{timeConflictAlert.suggestions.length >
+										0 && (
+										<div>
+											<p className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-2">
+												Suggested alternative times:
+											</p>
+											<div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+												{timeConflictAlert.suggestions.map(
+													(suggestion, index) => (
+														<Button
+															key={index}
+															variant="outline"
+															size="sm"
+															className="justify-start text-xs"
+															onClick={() => {
+																if (
+																	activeTab ===
+																		"tasks" &&
+																	showAddTask
+																) {
+																	setNewTask({
+																		...newTask,
+																		time: `${suggestion.start}-${suggestion.end}`,
+																	});
+																}
+																setTimeConflictAlert(
+																	{
+																		show: false,
+																		message:
+																			"",
+																		suggestions:
+																			[],
+																	}
+																);
+															}}
+														>
+															{suggestion.start} -{" "}
+															{suggestion.end}
+														</Button>
+													)
+												)}
+											</div>
+										</div>
+									)}
+								</div>
+								<Button
+									variant="ghost"
+									size="sm"
+									onClick={() =>
+										setTimeConflictAlert({
+											show: false,
+											message: "",
+											suggestions: [],
+										})
+									}
+								>
+									<X className="h-4 w-4" />
+								</Button>
+							</div>
+						</div>
+					)}
+
 					{activeTab === "tasks" ? (
 						<TaskManagement
-							localTasks={localTasks}
+							tasks={tasks}
 							categories={categories}
 							newTask={newTask}
 							setNewTask={setNewTask}
@@ -420,12 +607,10 @@ export function ScheduleCustomization({
 							editingTaskId={editingTaskId}
 							setEditingTaskId={setEditingTaskId}
 							onAddTask={handleAddTask}
-							onDeleteTask={handleDeleteTask}
+							onDeleteTask={handleTaskDelete}
 							onTaskEdit={handleTaskEdit}
-							onDragStart={handleDragStart}
-							onDragOver={handleDragOver}
-							onDrop={handleDrop}
 							getCategoryConfig={getCategoryConfig}
+							loading={loading}
 						/>
 					) : (
 						<CategoryManagement
@@ -434,15 +619,16 @@ export function ScheduleCustomization({
 							setNewCategory={setNewCategory}
 							showAddCategory={showAddCategory}
 							setShowAddCategory={setShowAddCategory}
-							editingCategory={editingCategory}
-							setEditingCategory={setEditingCategory}
+							editingCategoryId={editingCategoryId}
+							setEditingCategoryId={setEditingCategoryId}
 							onAddCategory={handleAddCategory}
-							onDeleteCategory={handleDeleteCategory}
+							onDeleteCategory={handleCategoryDelete}
 							updateCategoryColor={updateCategoryColor}
-							updateCategoryName={updateCategoryName}
+							onCategoryUpdate={handleCategoryUpdate}
 							handleNewCategoryColorChange={
 								handleNewCategoryColorChange
 							}
+							loading={loading}
 						/>
 					)}
 				</CardContent>
@@ -450,17 +636,21 @@ export function ScheduleCustomization({
 				{/* Footer */}
 				<div className="border-t p-4 flex justify-between items-center bg-secondary/20">
 					<div className="text-sm text-muted-foreground">
-						{localTasks.length} tasks •{" "}
-						{Object.keys(categories).length} categories • Drag and
-						drop to reorder
+						{tasks.length} tasks • {categories.length} categories
+						{loading && (
+							<span className="flex items-center gap-2 ml-4">
+								<Loader2 className="h-3 w-3 animate-spin" />
+								Saving...
+							</span>
+						)}
 					</div>
 					<div className="flex gap-2">
-						<Button variant="outline" onClick={onClose}>
-							Cancel
-						</Button>
-						<Button onClick={handleSaveChanges}>
-							<Save className="h-4 w-4 mr-2" />
-							Save Changes
+						<Button
+							variant="outline"
+							onClick={onClose}
+							disabled={loading}
+						>
+							Close
 						</Button>
 					</div>
 				</div>
@@ -471,8 +661,8 @@ export function ScheduleCustomization({
 
 // Task Management Component
 interface TaskManagementProps {
-	localTasks: Task[];
-	categories: Record<string, CategoryConfig>;
+	tasks: Task[];
+	categories: Category[];
 	newTask: {
 		name: string;
 		time: string;
@@ -488,14 +678,12 @@ interface TaskManagementProps {
 	onAddTask: () => void;
 	onDeleteTask: (taskId: string) => void;
 	onTaskEdit: (taskId: string, updatedTask: Partial<Task>) => void;
-	onDragStart: (e: React.DragEvent, taskId: string) => void;
-	onDragOver: (e: React.DragEvent) => void;
-	onDrop: (e: React.DragEvent, targetBlock: TimeBlock) => void;
-	getCategoryConfig: (category: string) => CategoryConfig;
+	getCategoryConfig: (category: string) => any;
+	loading: boolean;
 }
 
 function TaskManagement({
-	localTasks,
+	tasks,
 	categories,
 	newTask,
 	setNewTask,
@@ -506,10 +694,8 @@ function TaskManagement({
 	onAddTask,
 	onDeleteTask,
 	onTaskEdit,
-	onDragStart,
-	onDragOver,
-	onDrop,
 	getCategoryConfig,
+	loading,
 }: TaskManagementProps) {
 	return (
 		<div className="space-y-6">
@@ -521,6 +707,7 @@ function TaskManagement({
 						variant="outline"
 						size="sm"
 						onClick={() => setShowAddTask(!showAddTask)}
+						disabled={loading}
 					>
 						<Plus className="h-4 w-4 mr-2" />
 						{showAddTask ? "Cancel" : "Add Task"}
@@ -540,6 +727,7 @@ function TaskManagement({
 									})
 								}
 								placeholder="Enter task name"
+								disabled={loading}
 							/>
 						</div>
 						<div>
@@ -553,6 +741,7 @@ function TaskManagement({
 									})
 								}
 								placeholder="9:00-10:00 AM"
+								disabled={loading}
 							/>
 						</div>
 						<div>
@@ -566,10 +755,11 @@ function TaskManagement({
 									})
 								}
 								className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
+								disabled={loading}
 							>
-								{Object.keys(categories).map((cat) => (
-									<option key={cat} value={cat}>
-										{cat}
+								{categories.map((cat) => (
+									<option key={cat.id} value={cat.name}>
+										{cat.name}
 									</option>
 								))}
 							</select>
@@ -586,6 +776,7 @@ function TaskManagement({
 									})
 								}
 								min="1"
+								disabled={loading}
 							/>
 						</div>
 						<div>
@@ -599,6 +790,7 @@ function TaskManagement({
 									})
 								}
 								className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
+								disabled={loading}
 							>
 								<option value="morning">Morning</option>
 								<option value="afternoon">Afternoon</option>
@@ -606,8 +798,16 @@ function TaskManagement({
 							</select>
 						</div>
 						<div className="lg:col-span-5">
-							<Button onClick={onAddTask} className="w-full">
-								<Plus className="h-4 w-4 mr-2" />
+							<Button
+								onClick={onAddTask}
+								className="w-full"
+								disabled={loading}
+							>
+								{loading ? (
+									<Loader2 className="h-4 w-4 mr-2 animate-spin" />
+								) : (
+									<Plus className="h-4 w-4 mr-2" />
+								)}
 								Add Task
 							</Button>
 						</div>
@@ -624,8 +824,6 @@ function TaskManagement({
 							"border-l-4 rounded-lg border bg-card",
 							color
 						)}
-						onDragOver={onDragOver}
-						onDrop={(e) => onDrop(e, key)}
 					>
 						<div className="p-4">
 							<h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -633,12 +831,42 @@ function TaskManagement({
 								{title}
 							</h3>
 							<div className="space-y-2">
-								{localTasks
+								{tasks
 									.filter((task) => task.block === key)
+									.sort((a, b) => {
+										// Sort by time start
+										const aTime = a.time
+											.split("-")[0]
+											.trim();
+										const bTime = b.time
+											.split("-")[0]
+											.trim();
+
+										const parseTime = (timeStr: string) => {
+											const [time, period] =
+												timeStr.split(" ");
+											const [hours, minutes] = time
+												.split(":")
+												.map(Number);
+											let hour24 = hours;
+
+											if (period === "PM" && hours !== 12)
+												hour24 += 12;
+											if (period === "AM" && hours === 12)
+												hour24 = 0;
+
+											return hour24 * 60 + minutes;
+										};
+
+										return (
+											parseTime(aTime) - parseTime(bTime)
+										);
+									})
 									.map((task) => (
 										<TaskEditCard
 											key={task.id}
 											task={task}
+											categories={categories}
 											isEditing={
 												editingTaskId === task.id
 											}
@@ -654,21 +882,16 @@ function TaskManagement({
 											onCancelEdit={() =>
 												setEditingTaskId(null)
 											}
-											onDragStart={(e) =>
-												onDragStart(e, task.id)
+											getCategoryConfig={
+												getCategoryConfig
 											}
-											categoryConfig={getCategoryConfig(
-												task.category
-											)}
-											availableCategories={Object.keys(
-												categories
-											)}
+											loading={loading}
 										/>
 									))}
-								{localTasks.filter((task) => task.block === key)
+								{tasks.filter((task) => task.block === key)
 									.length === 0 && (
 									<div className="text-sm text-muted-foreground text-center p-4 border-2 border-dashed rounded">
-										Drop tasks here or add new ones
+										No tasks in this time block
 									</div>
 								)}
 							</div>
@@ -683,26 +906,26 @@ function TaskManagement({
 // Task Edit Card Component
 interface TaskEditCardProps {
 	task: Task;
+	categories: Category[];
 	isEditing: boolean;
 	onEdit: (updatedTask: Partial<Task>) => void;
 	onDelete: () => void;
 	onStartEdit: () => void;
 	onCancelEdit: () => void;
-	onDragStart: (e: React.DragEvent) => void;
-	categoryConfig: CategoryConfig;
-	availableCategories: string[];
+	getCategoryConfig: (category: string) => any;
+	loading: boolean;
 }
 
 function TaskEditCard({
 	task,
+	categories,
 	isEditing,
 	onEdit,
 	onDelete,
 	onStartEdit,
 	onCancelEdit,
-	onDragStart,
-	categoryConfig,
-	availableCategories,
+	getCategoryConfig,
+	loading,
 }: TaskEditCardProps) {
 	const [editData, setEditData] = useState({
 		name: task.name,
@@ -716,6 +939,8 @@ function TaskEditCard({
 		onEdit(editData);
 	};
 
+	const categoryConfig = getCategoryConfig(task.category);
+
 	if (isEditing) {
 		return (
 			<div className="p-3 border rounded-lg bg-secondary/20">
@@ -726,6 +951,7 @@ function TaskEditCard({
 							setEditData({ ...editData, name: e.target.value })
 						}
 						placeholder="Task name"
+						disabled={loading}
 					/>
 					<div className="grid grid-cols-2 gap-2">
 						<Input
@@ -737,6 +963,7 @@ function TaskEditCard({
 								})
 							}
 							placeholder="Time"
+							disabled={loading}
 						/>
 						<Input
 							type="number"
@@ -749,6 +976,7 @@ function TaskEditCard({
 							}
 							placeholder="Duration"
 							min="1"
+							disabled={loading}
 						/>
 					</div>
 					<select
@@ -756,26 +984,36 @@ function TaskEditCard({
 						onChange={(e) =>
 							setEditData({
 								...editData,
-								category: e.target.value as TaskCategory,
+								category: e.target.value,
 							})
 						}
 						className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
+						disabled={loading}
 					>
-						{availableCategories.map((cat) => (
-							<option key={cat} value={cat}>
-								{cat}
+						{categories.map((cat) => (
+							<option key={cat.id} value={cat.name}>
+								{cat.name}
 							</option>
 						))}
 					</select>
 					<div className="flex gap-2">
-						<Button size="sm" onClick={handleSave}>
-							<Save className="h-3 w-3 mr-1" />
+						<Button
+							size="sm"
+							onClick={handleSave}
+							disabled={loading}
+						>
+							{loading ? (
+								<Loader2 className="h-3 w-3 mr-1 animate-spin" />
+							) : (
+								<Save className="h-3 w-3 mr-1" />
+							)}
 							Save
 						</Button>
 						<Button
 							size="sm"
 							variant="outline"
 							onClick={onCancelEdit}
+							disabled={loading}
 						>
 							<X className="h-3 w-3 mr-1" />
 							Cancel
@@ -787,11 +1025,7 @@ function TaskEditCard({
 	}
 
 	return (
-		<div
-			draggable
-			onDragStart={onDragStart}
-			className="p-3 border rounded-lg hover:bg-secondary/50 transition-colors cursor-move group"
-		>
+		<div className="p-3 border rounded-lg hover:bg-secondary/50 transition-colors group">
 			<div className="flex items-start justify-between">
 				<div className="flex items-start gap-2 flex-1 min-w-0">
 					<GripVertical className="h-4 w-4 text-muted-foreground mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -814,10 +1048,20 @@ function TaskEditCard({
 					</div>
 				</div>
 				<div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-					<Button size="sm" variant="ghost" onClick={onStartEdit}>
+					<Button
+						size="sm"
+						variant="ghost"
+						onClick={onStartEdit}
+						disabled={loading}
+					>
 						<Edit2 className="h-3 w-3" />
 					</Button>
-					<Button size="sm" variant="ghost" onClick={onDelete}>
+					<Button
+						size="sm"
+						variant="ghost"
+						onClick={onDelete}
+						disabled={loading}
+					>
 						<Trash2 className="h-3 w-3" />
 					</Button>
 				</div>
@@ -828,7 +1072,7 @@ function TaskEditCard({
 
 // Category Management Component
 interface CategoryManagementProps {
-	categories: Record<string, CategoryConfig>;
+	categories: Category[];
 	newCategory: {
 		name: string;
 		color: string;
@@ -838,13 +1082,14 @@ interface CategoryManagementProps {
 	setNewCategory: (category: any) => void;
 	showAddCategory: boolean;
 	setShowAddCategory: (show: boolean) => void;
-	editingCategory: string | null;
-	setEditingCategory: (category: string | null) => void;
+	editingCategoryId: string | null;
+	setEditingCategoryId: (categoryId: string | null) => void;
 	onAddCategory: () => void;
-	onDeleteCategory: (categoryName: string) => void;
-	updateCategoryColor: (category: string, colorConfig: any) => void;
-	updateCategoryName: (oldName: string, newName: string) => void;
+	onDeleteCategory: (categoryId: string) => void;
+	updateCategoryColor: (categoryId: string, colorConfig: any) => void;
+	onCategoryUpdate: (categoryId: string, updates: Partial<Category>) => void;
 	handleNewCategoryColorChange: (colorConfig: any) => void;
+	loading: boolean;
 }
 
 function CategoryManagement({
@@ -853,13 +1098,14 @@ function CategoryManagement({
 	setNewCategory,
 	showAddCategory,
 	setShowAddCategory,
-	editingCategory,
-	setEditingCategory,
+	editingCategoryId,
+	setEditingCategoryId,
 	onAddCategory,
 	onDeleteCategory,
 	updateCategoryColor,
-	updateCategoryName,
+	onCategoryUpdate,
 	handleNewCategoryColorChange,
+	loading,
 }: CategoryManagementProps) {
 	return (
 		<div className="space-y-6">
@@ -884,6 +1130,7 @@ function CategoryManagement({
 						variant="outline"
 						size="sm"
 						onClick={() => setShowAddCategory(!showAddCategory)}
+						disabled={loading}
 					>
 						<Plus className="h-4 w-4 mr-2" />
 						{showAddCategory ? "Cancel" : "Add Category"}
@@ -904,6 +1151,7 @@ function CategoryManagement({
 										})
 									}
 									placeholder="Enter category name"
+									disabled={loading}
 								/>
 							</div>
 							<div>
@@ -940,13 +1188,22 @@ function CategoryManagement({
 												: "border-transparent hover:border-muted-foreground"
 										)}
 										title={colorOption.name}
+										disabled={loading}
 									/>
 								))}
 							</div>
 						</div>
 
-						<Button onClick={onAddCategory} className="w-full">
-							<Plus className="h-4 w-4 mr-2" />
+						<Button
+							onClick={onAddCategory}
+							className="w-full"
+							disabled={loading}
+						>
+							{loading ? (
+								<Loader2 className="h-4 w-4 mr-2 animate-spin" />
+							) : (
+								<Plus className="h-4 w-4 mr-2" />
+							)}
 							Create Category
 						</Button>
 					</div>
@@ -955,127 +1212,22 @@ function CategoryManagement({
 
 			{/* Existing Categories */}
 			<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-				{Object.entries(categories).map(([key, config]) => (
-					<Card key={key} className="p-4">
-						<div className="space-y-4">
-							{/* Category Header */}
-							<div className="flex items-center justify-between">
-								{editingCategory === key ? (
-									<div className="flex items-center gap-2 flex-1">
-										<Input
-											defaultValue={config.name}
-											className="flex-1"
-											onKeyDown={(e) => {
-												if (e.key === "Enter") {
-													updateCategoryName(
-														key,
-														e.currentTarget.value
-													);
-												} else if (e.key === "Escape") {
-													setEditingCategory(null);
-												}
-											}}
-											onBlur={(e) =>
-												updateCategoryName(
-													key,
-													e.target.value
-												)
-											}
-											autoFocus
-										/>
-										<Button
-											size="sm"
-											variant="ghost"
-											onClick={() =>
-												setEditingCategory(null)
-											}
-										>
-											<X className="h-3 w-3" />
-										</Button>
-									</div>
-								) : (
-									<>
-										<div className="flex items-center gap-3">
-											<div
-												className={cn(
-													"w-4 h-4 rounded-full",
-													config.color
-												)}
-											/>
-											<span className="font-medium">
-												{config.name}
-											</span>
-										</div>
-										<div className="flex gap-1">
-											<Button
-												size="sm"
-												variant="ghost"
-												onClick={() =>
-													setEditingCategory(key)
-												}
-											>
-												<Edit2 className="h-3 w-3" />
-											</Button>
-											{!defaultCategories[key] && (
-												<Button
-													size="sm"
-													variant="ghost"
-													onClick={() =>
-														onDeleteCategory(key)
-													}
-												>
-													<Trash2 className="h-3 w-3" />
-												</Button>
-											)}
-										</div>
-									</>
-								)}
-							</div>
-
-							{/* Preview */}
-							<div className="space-y-2">
-								<Label className="text-xs">Preview</Label>
-								<div
-									className={cn(
-										"px-3 py-2 rounded-full text-sm font-medium inline-block",
-										config.bgColor,
-										config.textColor
-									)}
-								>
-									{config.name} Task
-								</div>
-							</div>
-
-							{/* Color Options */}
-							<div className="space-y-2">
-								<Label className="text-xs">Color</Label>
-								<div className="grid grid-cols-4 gap-2">
-									{colorOptions
-										.slice(0, 8)
-										.map((colorOption, index) => (
-											<button
-												key={index}
-												onClick={() =>
-													updateCategoryColor(
-														key,
-														colorOption
-													)
-												}
-												className={cn(
-													"w-8 h-8 rounded-full border-2 transition-all",
-													colorOption.color,
-													config.color ===
-														colorOption.color
-														? "border-foreground scale-110"
-														: "border-transparent hover:border-muted-foreground"
-												)}
-												title={colorOption.name}
-											/>
-										))}
-								</div>
-							</div>
-						</div>
-					</Card>
+				{categories.map((category) => (
+					<CategoryCard
+						key={category.id}
+						category={category}
+						isEditing={editingCategoryId === category.id}
+						onEdit={(updates) =>
+							onCategoryUpdate(category.id, updates)
+						}
+						onDelete={() => onDeleteCategory(category.id)}
+						onStartEdit={() => setEditingCategoryId(category.id)}
+						onCancelEdit={() => setEditingCategoryId(null)}
+						updateCategoryColor={(colorConfig) =>
+							updateCategoryColor(category.id, colorConfig)
+						}
+						loading={loading}
+					/>
 				))}
 			</div>
 
@@ -1101,17 +1253,169 @@ function CategoryManagement({
 								edit button
 							</li>
 							<li>
-								• Default categories cannot be deleted, but
-								custom ones can be
+								• Deleting a category will reassign its tasks to
+								"Personal"
 							</li>
 							<li>
-								• Changes are saved automatically when you close
-								this dialog
+								• Changes are saved automatically to the
+								database
 							</li>
 						</ul>
 					</div>
 				</div>
 			</div>
 		</div>
+	);
+}
+
+// Category Card Component
+interface CategoryCardProps {
+	category: Category;
+	isEditing: boolean;
+	onEdit: (updates: Partial<Category>) => void;
+	onDelete: () => void;
+	onStartEdit: () => void;
+	onCancelEdit: () => void;
+	updateCategoryColor: (colorConfig: (typeof colorOptions)[0]) => void;
+	loading: boolean;
+}
+
+function CategoryCard({
+	category,
+	isEditing,
+	onEdit,
+	onDelete,
+	onStartEdit,
+	onCancelEdit,
+	updateCategoryColor,
+	loading,
+}: CategoryCardProps) {
+	const [editName, setEditName] = useState(category.name);
+
+	const handleSave = () => {
+		if (!editName.trim() || editName === category.name) {
+			onCancelEdit();
+			return;
+		}
+		onEdit({ name: editName });
+	};
+
+	return (
+		<Card className="p-4">
+			<div className="space-y-4">
+				{/* Category Header */}
+				<div className="flex items-center justify-between">
+					{isEditing ? (
+						<div className="flex items-center gap-2 flex-1">
+							<Input
+								value={editName}
+								onChange={(e) => setEditName(e.target.value)}
+								className="flex-1"
+								onKeyDown={(e) => {
+									if (e.key === "Enter") {
+										handleSave();
+									} else if (e.key === "Escape") {
+										setEditName(category.name);
+										onCancelEdit();
+									}
+								}}
+								disabled={loading}
+								autoFocus
+							/>
+							<Button
+								size="sm"
+								onClick={handleSave}
+								disabled={loading}
+							>
+								{loading ? (
+									<Loader2 className="h-3 w-3 animate-spin" />
+								) : (
+									<Save className="h-3 w-3" />
+								)}
+							</Button>
+							<Button
+								size="sm"
+								variant="ghost"
+								onClick={() => {
+									setEditName(category.name);
+									onCancelEdit();
+								}}
+								disabled={loading}
+							>
+								<X className="h-3 w-3" />
+							</Button>
+						</div>
+					) : (
+						<>
+							<div className="flex items-center gap-3">
+								<div
+									className={cn(
+										"w-4 h-4 rounded-full",
+										category.color
+									)}
+								/>
+								<span className="font-medium">
+									{category.name}
+								</span>
+							</div>
+							<div className="flex gap-1">
+								<Button
+									size="sm"
+									variant="ghost"
+									onClick={onStartEdit}
+									disabled={loading}
+								>
+									<Edit2 className="h-3 w-3" />
+								</Button>
+								<Button
+									size="sm"
+									variant="ghost"
+									onClick={onDelete}
+									disabled={loading}
+								>
+									<Trash2 className="h-3 w-3" />
+								</Button>
+							</div>
+						</>
+					)}
+				</div>
+
+				{/* Preview */}
+				<div className="space-y-2">
+					<Label className="text-xs">Preview</Label>
+					<div
+						className={cn(
+							"px-3 py-2 rounded-full text-sm font-medium inline-block",
+							category.bgColor,
+							category.textColor
+						)}
+					>
+						{category.name} Task
+					</div>
+				</div>
+
+				{/* Color Options */}
+				<div className="space-y-2">
+					<Label className="text-xs">Color</Label>
+					<div className="grid grid-cols-4 gap-2">
+						{colorOptions.slice(0, 8).map((colorOption, index) => (
+							<button
+								key={index}
+								onClick={() => updateCategoryColor(colorOption)}
+								className={cn(
+									"w-8 h-8 rounded-full border-2 transition-all",
+									colorOption.color,
+									category.color === colorOption.color
+										? "border-foreground scale-110"
+										: "border-transparent hover:border-muted-foreground"
+								)}
+								title={colorOption.name}
+								disabled={loading}
+							/>
+						))}
+					</div>
+				</div>
+			</div>
+		</Card>
 	);
 }

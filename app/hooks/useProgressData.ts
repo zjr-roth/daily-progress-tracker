@@ -1,11 +1,11 @@
+// app/hooks/useProgressData.ts - Updated to work with dynamic tasks
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { ProgressData, DayProgress, Task } from '../lib/types';
-import { tasks } from '../data/tasks';
 import { formatDate } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { DailyDataService } from '../lib/dailyDataService';
 
-export function useProgressData() {
+export function useProgressData(tasks: Task[]) {
   const { user } = useAuth();
   const [progressData, setProgressData] = useState<ProgressData>({});
   const [currentDate, setCurrentDate] = useState<string>('');
@@ -53,7 +53,7 @@ export function useProgressData() {
   }, [progressData]);
 
   const updateTaskCompletion = useCallback(async (taskId: string, isCompleted: boolean, date: string) => {
-    if (!user?.id) return;
+    if (!user?.id || tasks.length === 0) return;
 
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
@@ -101,7 +101,7 @@ export function useProgressData() {
           }
         }
 
-        // Update completion percentage
+        // Update completion percentage based on current tasks
         const totalTasks = tasks.length;
         const completedTasks = totalTasks - incompleteTaskIds.length;
         dateData.completionPercentage = Math.round((completedTasks / totalTasks) * 100);
@@ -161,7 +161,7 @@ export function useProgressData() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, progressData, loadProgressData]);
+  }, [user?.id, progressData, tasks, loadProgressData]);
 
   const getDateProgress = useCallback((date: string): DayProgress => {
     const defaultProgress = {
@@ -171,7 +171,7 @@ export function useProgressData() {
     };
 
     return progressData[date] || defaultProgress;
-  }, [progressData]);
+  }, [progressData, tasks]);
 
   const goToToday = useCallback(() => {
     setCurrentDate(formatDate(new Date()));

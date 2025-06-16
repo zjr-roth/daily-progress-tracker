@@ -1,7 +1,18 @@
+// app/page.tsx - Updated to include Smart Scheduling Assistant
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Download, LogOut, Loader2, Settings, Sparkles } from "lucide-react";
+import {
+	Download,
+	LogOut,
+	Loader2,
+	Settings,
+	Sparkles,
+	Plus,
+	AlertCircle,
+	Brain,
+} from "lucide-react";
+import { useTaskData } from "./hooks/useTaskData";
 import { useProgressData } from "./hooks/useProgressData";
 import { DateSelector } from "./components/DateSelector";
 import { ProgressCircle } from "./components/ProgressCircle";
@@ -12,17 +23,19 @@ import { AnalysisSection } from "./components/AnalysisSection";
 import { StreakStats } from "./components/StreakStats";
 import { ScheduleCustomization } from "./components/ScheduleCustomization";
 import { AIOnboardingFlow } from "./components/AIOnboardingFlow";
+/* import { SmartSchedulingAssistant } from "./components/SmartSchedulingAssistant"; */
 import { Button } from "./components/ui/button";
 import { Card, CardContent } from "./components/ui/card";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { useAuth } from "./contexts/AuthContext";
-import { tasks as defaultTasks } from "./data/tasks";
 import { Task } from "./lib/types";
 import {
 	formatDisplayDate,
 	calculateCategoryStats,
 	calculateStreakData,
 	exportToCSV,
+	checkTimeConflictWithDatabase,
+	suggestAlternativeTimeSlotsWithDatabase,
 } from "./lib/utils";
 import Image from "next/image";
 
@@ -57,6 +70,20 @@ const getDailyGreeting = () => {
 function DashboardContent() {
 	const { user, signOut } = useAuth();
 	const {
+		tasks,
+		categories,
+		loading: taskLoading,
+		error: taskError,
+		createTask,
+		updateTask,
+		deleteTask,
+		createCategory,
+		updateCategory,
+		deleteCategory,
+		refreshData: refreshTasks,
+	} = useTaskData();
+
+	const {
 		progressData,
 		currentDate,
 		setCurrentDate,
@@ -64,20 +91,30 @@ function DashboardContent() {
 		updateTaskCompletion,
 		getDateProgress,
 		goToToday,
-		loading,
-		error,
-		refreshData,
-	} = useProgressData();
+		loading: progressLoading,
+		error: progressError,
+		refreshData: refreshProgress,
+	} = useProgressData(tasks);
 
-	// Local state for task management
-	const [tasks, setTasks] = useState<Task[]>(defaultTasks);
+	// Local state for UI
 	const [showCustomization, setShowCustomization] = useState(false);
 	const [showAIOnboarding, setShowAIOnboarding] = useState(false);
+	const [showSmartAssistant, setShowSmartAssistant] = useState(false);
 	const [isNewUser, setIsNewUser] = useState(false);
+	const [timeConflictAlert, setTimeConflictAlert] = useState<{
+		show: boolean;
+		message: string;
+		suggestions: Array<{
+			start: string;
+			end: string;
+			type: string;
+			recommended: boolean;
+		}>;
+	}>({ show: false, message: "", suggestions: [] });
 
-	// Check if user is new (has no progress data)
+	// Check if user is new (has no tasks)
 	useEffect(() => {
-		if (user && Object.keys(progressData).length === 0 && !loading) {
+		if (user && tasks.length === 0 && !taskLoading && !isNewUser) {
 			// Show AI onboarding for new users after a brief delay
 			const timer = setTimeout(() => {
 				setIsNewUser(true);
@@ -85,7 +122,7 @@ function DashboardContent() {
 			}, 1000);
 			return () => clearTimeout(timer);
 		}
-	}, [user, progressData, loading]);
+	}, [user, tasks, taskLoading, isNewUser]);
 
 	// Don't render anything until currentDate is set to avoid hydration issues
 	if (!currentDate) {
@@ -104,118 +141,99 @@ function DashboardContent() {
 	}
 
 	const dateProgress = getDateProgress(currentDate);
-	const completedTasks = tasks.length - dateProgress.incompleteTasks.length;
+	const completedTasks =
+		tasks.length -
+		(dateProgress.incompleteTaskIds?.length ||
+			dateProgress.incompleteTasks.length);
 	const categoryStats = calculateCategoryStats(tasks, dateProgress);
 	const streakData = calculateStreakData(progressData);
 
-	const handleTaskToggle = (taskId: string, completed: boolean) => {
-		updateTaskCompletion(taskId, completed, currentDate);
-	};
-
-	const handleTaskEdit = (taskId: string, updatedTask: Partial<Task>) => {
-		setTasks((prevTasks) =>
-			prevTasks.map((task) =>
-				task.id === taskId ? { ...task, ...updatedTask } : task
-			)
-		);
-
-		// Show success message
-		showToast("Task updated successfully!", "success");
-	};
-
-	const handleTasksUpdate = (updatedTasks: Task[]) => {
-		setTasks(updatedTasks);
-
-		// Recalculate progress based on new task list
-		recalculateProgressForNewTasks(updatedTasks);
-
-		showToast("Schedule updated successfully!", "success");
-	};
-
-	// Function to recalculate progress when tasks change
-	const recalculateProgressForNewTasks = async (newTasks: Task[]) => {
-		if (!user?.id) return;
-
+	const handleTaskToggle = async (taskId: string, completed: boolean) => {
 		try {
-			// Get current progress data to find which tasks are incomplete
-			const currentProgress = getDateProgress(currentDate);
-			const currentIncompleteTaskIds =
-				currentProgress.incompleteTaskIds || [];
-
-			// Filter incomplete task IDs to only include tasks that still exist
-			const existingTaskIds = newTasks.map((task) => task.id);
-			const validIncompleteTaskIds = currentIncompleteTaskIds.filter(
-				(taskId) => existingTaskIds.includes(taskId)
-			);
-
-			// Convert to task names for backward compatibility
-			const validIncompleteTasks = newTasks
-				.filter((task) => validIncompleteTaskIds.includes(task.id))
-				.map((task) => task.name);
-
-			// Recalculate completion percentage
-			const totalTasks = newTasks.length;
-			const completedTasksCount =
-				totalTasks - validIncompleteTaskIds.length;
-			const newCompletionPercentage = Math.round(
-				(completedTasksCount / totalTasks) * 100
-			);
-
-			// Update the progress data if there are changes
-			if (
-				validIncompleteTaskIds.length !==
-					currentIncompleteTaskIds.length ||
-				newCompletionPercentage !== currentProgress.completionPercentage
-			) {
-				await updateTaskCompletion(
-					newTasks[0]?.id || "dummy-task",
-					true,
-					currentDate
-				);
-
-				// Force refresh the data to reflect the changes
-				refreshData();
-			}
+			await updateTaskCompletion(taskId, completed, currentDate);
 		} catch (error) {
-			console.error("Error recalculating progress:", error);
+			showToast("Failed to update task completion", "error");
 		}
 	};
 
-	const handleScheduleGenerated = (generatedSchedule: {
+	const handleTaskEdit = async (
+		taskId: string,
+		updatedTask: Partial<Task>
+	) => {
+		try {
+			// Enhanced time conflict detection using database
+			if (updatedTask.time && user?.id) {
+				const conflict = await checkTimeConflictWithDatabase(
+					user.id,
+					updatedTask.time,
+					updatedTask.duration || 0,
+					currentDate,
+					taskId
+				);
+
+				if (conflict.hasConflict) {
+					// Get enhanced suggestions from database
+					const suggestions =
+						await suggestAlternativeTimeSlotsWithDatabase(
+							user.id,
+							updatedTask.duration || 0,
+							updatedTask.block,
+							currentDate
+						);
+
+					setTimeConflictAlert({
+						show: true,
+						message:
+							"This time slot conflicts with an existing task",
+						suggestions,
+					});
+					return;
+				}
+			}
+
+			await updateTask(taskId, updatedTask);
+			showToast("Task updated successfully!", "success");
+		} catch (error: any) {
+			showToast(error.message || "Failed to update task", "error");
+		}
+	};
+
+	const handleTaskDelete = async (taskId: string) => {
+		try {
+			await deleteTask(taskId);
+			showToast("Task deleted successfully!", "success");
+		} catch (error: any) {
+			showToast(error.message || "Failed to delete task", "error");
+		}
+	};
+
+	const handleScheduleGenerated = async (generatedSchedule: {
 		tasks: Task[];
 		insights: string[];
 		recommendations: string[];
 	}) => {
-		setTasks(generatedSchedule.tasks);
-		setShowAIOnboarding(false);
+		try {
+			// Create new tasks from generated schedule
+			for (const task of generatedSchedule.tasks) {
+				await createTask(task);
+			}
 
-		// Reset progress for the new schedule
-		resetProgressForNewSchedule(generatedSchedule.tasks);
-
-		showToast("Your personalized schedule has been created! 🎉", "success");
+			setShowAIOnboarding(false);
+			showToast(
+				"Your personalized schedule has been created! 🎉",
+				"success"
+			);
+		} catch (error: any) {
+			showToast(error.message || "Failed to create AI schedule", "error");
+		}
 	};
 
-	// Function to reset progress when a completely new schedule is generated
-	const resetProgressForNewSchedule = async (newTasks: Task[]) => {
-		if (!user?.id) return;
-
-		try {
-			// Create fresh progress data with all tasks incomplete
-			const incompleteTaskIds = newTasks.map((task) => task.id);
-			const incompleteTasks = newTasks.map((task) => task.name);
-
-			// Update the current date's progress to reflect the new schedule
-			await updateTaskCompletion(
-				newTasks[0]?.id || "dummy-task",
-				false, // Mark as incomplete to reset
-				currentDate
-			);
-
-			// Refresh data to show the updated progress
-			refreshData();
-		} catch (error) {
-			console.error("Error resetting progress for new schedule:", error);
-		}
+	// Handle smart assistant time slot selection
+	const handleTimeSlotSelect = (timeSlot: string, timeBlock: string) => {
+		setShowSmartAssistant(false);
+		setShowCustomization(true);
+		// You could pre-fill the task creation form with the selected time slot
+		showToast(`Selected ${timeSlot} in ${timeBlock} block`, "success");
 	};
 
 	const showToast = (
@@ -260,6 +278,14 @@ function DashboardContent() {
 		}
 	};
 
+	const refreshAllData = () => {
+		refreshTasks();
+		refreshProgress();
+	};
+
+	const loading = taskLoading || progressLoading;
+	const error = taskError || progressError;
+
 	return (
 		<div className="container mx-auto px-4 py-8 max-w-7xl">
 			{/* Header with User Info */}
@@ -278,32 +304,22 @@ function DashboardContent() {
 
 				<div className="flex items-center text-sm text-muted-foreground">
 					<div className="flex flex-col items-center">
-						<h1 className="text-5xl font-semibold mb-2">
+						<h1 className="text-sm text-nowrap sm:text-xl md:text-2xl lg:text-3xl font-semibold mb-2">
 							{getDailyGreeting()}{" "}
 							<span>{user?.user_metadata.full_name}</span>!
 						</h1>
-						{isNewUser && !showAIOnboarding && (
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={() => setShowAIOnboarding(true)}
-								className="mt-2"
-							>
-								<Sparkles className="h-4 w-4 mr-2" />
-								Create AI Schedule
-							</Button>
-						)}
 					</div>
 				</div>
 
 				<div className="flex items-center gap-4">
 					{error && (
 						<div className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md flex items-center gap-2">
+							<AlertCircle className="h-4 w-4" />
 							<span>{error}</span>
 							<Button
 								variant="ghost"
 								size="sm"
-								onClick={refreshData}
+								onClick={refreshAllData}
 							>
 								Retry
 							</Button>
@@ -317,162 +333,336 @@ function DashboardContent() {
 				</div>
 			</header>
 
-			{/* Date Selection and Progress Overview */}
-			<Card className="mb-8">
-				<CardContent className="p-6">
-					<div className="mb-6">
-						<DateSelector
-							currentDate={currentDate}
-							onDateChange={setCurrentDate}
-							onGoToToday={goToToday}
-						/>
-					</div>
-
-					<div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-center">
-						{/* Progress Circle */}
-						<div className="flex items-center gap-4">
-							<ProgressCircle
-								percentage={dateProgress.completionPercentage}
-							/>
-							<div>
-								<h3 className="text-xl font-semibold mb-1">
-									Progress for{" "}
-									{
-										formatDisplayDate(currentDate).split(
-											","
-										)[0]
-									}
-								</h3>
-								<p className="text-muted-foreground">
-									{completedTasks} of {tasks.length} tasks
-									completed
-								</p>
-								{loading && (
-									<p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-										<Loader2 className="h-3 w-3 animate-spin" />
-										Syncing...
+			{/* Time Conflict Alert */}
+			{timeConflictAlert.show && (
+				<div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+					<div className="flex items-start gap-3">
+						<AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+						<div className="flex-1">
+							<h3 className="font-medium text-yellow-800 dark:text-yellow-200 mb-2">
+								Scheduling Conflict
+							</h3>
+							<p className="text-sm text-yellow-700 dark:text-yellow-300 mb-3">
+								{timeConflictAlert.message}
+							</p>
+							{timeConflictAlert.suggestions.length > 0 && (
+								<div>
+									<p className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-2">
+										Smart suggestions from your schedule:
 									</p>
-								)}
+									<div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+										{timeConflictAlert.suggestions.map(
+											(suggestion, index) => (
+												<Button
+													key={index}
+													variant="outline"
+													size="sm"
+													className={`justify-start text-xs ${
+														suggestion.recommended
+															? "border-primary bg-primary/5"
+															: ""
+													}`}
+													onClick={() => {
+														// Could auto-fill the form with this time
+														setTimeConflictAlert({
+															show: false,
+															message: "",
+															suggestions: [],
+														});
+													}}
+												>
+													<div className="flex items-center gap-2">
+														{suggestion.recommended && (
+															<Sparkles className="h-3 w-3 text-primary" />
+														)}
+														<span>
+															{suggestion.start} -{" "}
+															{suggestion.end}
+														</span>
+														<span className="text-muted-foreground">
+															({suggestion.type})
+														</span>
+													</div>
+												</Button>
+											)
+										)}
+									</div>
+								</div>
+							)}
+						</div>
+						<Button
+							variant="ghost"
+							size="sm"
+							onClick={() =>
+								setTimeConflictAlert({
+									show: false,
+									message: "",
+									suggestions: [],
+								})
+							}
+						>
+							×
+						</Button>
+					</div>
+				</div>
+			)}
+
+			{/* Main Layout with Smart Assistant */}
+			<div className="flex flex-col gap-6 mb-8">
+				{/* Left Column - Main Content */}
+				<div className="xl:col-span-3 space-y-8">
+					{/* Date Selection and Progress Overview */}
+					<Card>
+						<CardContent className="p-6">
+							<div className="mb-6">
+								<DateSelector
+									currentDate={currentDate}
+									onDateChange={setCurrentDate}
+									onGoToToday={goToToday}
+								/>
 							</div>
-						</div>
 
-						{/* Category Stats */}
-						<div className="lg:col-span-2">
-							<CategoryStats stats={categoryStats} />
-						</div>
-					</div>
-				</CardContent>
-			</Card>
+							<div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-center">
+								{/* Progress Circle */}
+								<div className="flex items-center gap-4">
+									<ProgressCircle
+										percentage={
+											dateProgress.completionPercentage
+										}
+									/>
+									<div>
+										<h3 className="text-xl font-semibold mb-1">
+											Progress for{" "}
+											{
+												formatDisplayDate(
+													currentDate
+												).split(",")[0]
+											}
+										</h3>
+										<p className="text-muted-foreground">
+											{completedTasks} of {tasks.length}{" "}
+											tasks completed
+										</p>
+										{loading && (
+											<p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+												<Loader2 className="h-3 w-3 animate-spin" />
+												Syncing...
+											</p>
+										)}
+									</div>
+								</div>
 
-			{/* Task Lists */}
-			<section className="mb-8">
-				<div className="flex justify-between items-center mb-6">
-					<h2 className="text-2xl font-semibold">
-						Daily Schedule & Tasks
-					</h2>
-					<div className="flex items-center gap-4">
-						<div className="text-sm text-muted-foreground">
-							Double-click any task to edit • Hover to see edit
-							button
-						</div>
-						<div className="flex gap-2">
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={() => setShowCustomization(true)}
-							>
-								<Settings className="h-4 w-4 mr-2" />
-								Customize Schedule
-							</Button>
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={() => setShowAIOnboarding(true)}
-							>
-								<Sparkles className="h-4 w-4 mr-2" />
-								AI Assistant
-							</Button>
-						</div>
-					</div>
+								{/* Category Stats */}
+								<div className="lg:col-span-2">
+									{tasks.length > 0 ? (
+										<CategoryStats stats={categoryStats} />
+									) : (
+										<div className="text-center py-8 text-muted-foreground">
+											<p className="text-lg mb-2">
+												No tasks yet!
+											</p>
+											<p className="text-sm">
+												Create your first schedule to
+												get started
+											</p>
+										</div>
+									)}
+								</div>
+							</div>
+						</CardContent>
+					</Card>
+
+					{/* Task Lists or Empty State */}
+					{tasks.length > 0 ? (
+						<section>
+							<div className="flex justify-between items-center mb-6">
+								<h2 className="text-2xl font-semibold">
+									Daily Schedule & Tasks
+								</h2>
+								<div className="flex items-center gap-4">
+									<div className="text-sm text-muted-foreground">
+										Double-click any task to edit • Hover to
+										see edit button
+									</div>
+									<div className="flex gap-2">
+										{/* <Button
+											variant="outline"
+											size="sm"
+											onClick={() =>
+												setShowSmartAssistant(true)
+											}
+										>
+											<Brain className="h-4 w-4 mr-2" />
+											Smart Assistant
+										</Button> */}
+										<Button
+											variant="outline"
+											size="sm"
+											onClick={() =>
+												setShowCustomization(true)
+											}
+										>
+											<Settings className="h-4 w-4 mr-2" />
+											Customize
+										</Button>
+										<Button
+											variant="outline"
+											size="sm"
+											onClick={() =>
+												setShowAIOnboarding(true)
+											}
+										>
+											<Sparkles className="h-4 w-4 mr-2" />
+											AI Assistant
+										</Button>
+									</div>
+								</div>
+							</div>
+							<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+								<TaskList
+									tasks={tasks}
+									timeBlock="morning"
+									isTaskCompleted={(taskId) =>
+										isTaskCompleted(taskId, currentDate)
+									}
+									onTaskToggle={handleTaskToggle}
+									onTaskEdit={handleTaskEdit}
+									onTaskDelete={handleTaskDelete}
+								/>
+								<TaskList
+									tasks={tasks}
+									timeBlock="afternoon"
+									isTaskCompleted={(taskId) =>
+										isTaskCompleted(taskId, currentDate)
+									}
+									onTaskToggle={handleTaskToggle}
+									onTaskEdit={handleTaskEdit}
+									onTaskDelete={handleTaskDelete}
+								/>
+								<TaskList
+									tasks={tasks}
+									timeBlock="evening"
+									isTaskCompleted={(taskId) =>
+										isTaskCompleted(taskId, currentDate)
+									}
+									onTaskToggle={handleTaskToggle}
+									onTaskEdit={handleTaskEdit}
+									onTaskDelete={handleTaskDelete}
+								/>
+							</div>
+						</section>
+					) : (
+						<section>
+							<Card>
+								<CardContent className="p-12 text-center">
+									<div className="max-w-md mx-auto">
+										<div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+											<Plus className="h-8 w-8 text-primary" />
+										</div>
+										<h3 className="text-xl font-semibold mb-2">
+											Ready to get organized?
+										</h3>
+										<p className="text-muted-foreground mb-6">
+											Create your personalized daily
+											schedule to start tracking your
+											productivity
+										</p>
+										<div className="flex gap-3 justify-center">
+											<Button
+												onClick={() =>
+													setShowAIOnboarding(true)
+												}
+											>
+												<Sparkles className="h-4 w-4 mr-2" />
+												Create with AI
+											</Button>
+											<Button
+												variant="outline"
+												onClick={() =>
+													setShowCustomization(true)
+												}
+											>
+												<Plus className="h-4 w-4 mr-2" />
+												Add Manually
+											</Button>
+										</div>
+									</div>
+								</CardContent>
+							</Card>
+						</section>
+					)}
 				</div>
-				<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-					<TaskList
-						tasks={tasks}
-						timeBlock="morning"
-						isTaskCompleted={(taskId) =>
-							isTaskCompleted(taskId, currentDate)
-						}
-						onTaskToggle={handleTaskToggle}
-						onTaskEdit={handleTaskEdit}
-					/>
-					<TaskList
-						tasks={tasks}
-						timeBlock="afternoon"
-						isTaskCompleted={(taskId) =>
-							isTaskCompleted(taskId, currentDate)
-						}
-						onTaskToggle={handleTaskToggle}
-						onTaskEdit={handleTaskEdit}
-					/>
-					<TaskList
-						tasks={tasks}
-						timeBlock="evening"
-						isTaskCompleted={(taskId) =>
-							isTaskCompleted(taskId, currentDate)
-						}
-						onTaskToggle={handleTaskToggle}
-						onTaskEdit={handleTaskEdit}
-					/>
-				</div>
-			</section>
 
-			{/* Progress Chart */}
-			<section className="mb-8">
-				<Card>
-					<CardContent className="p-6">
-						<div className="flex justify-between items-center mb-6">
-							<h2 className="text-2xl font-semibold">
-								Progress History
-							</h2>
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={handleExport}
-								disabled={
-									Object.keys(progressData).length === 0
-								}
-							>
-								<Download className="w-4 h-4 mr-2" />
-								Export CSV
-							</Button>
-						</div>
-						<ProgressChart
-							progressData={progressData}
-							onDateClick={handleDateClick}
+				{/* Right Column - Smart Assistant */}
+				{/* 	{tasks.length > 0 && user?.id && (
+					<div className="xl:col-span-1">
+						<SmartSchedulingAssistant
+							userId={user.id}
+							currentDate={currentDate}
+							onTimeSlotSelect={handleTimeSlotSelect}
 						/>
-					</CardContent>
-				</Card>
-			</section>
+					</div>
+				)} */}
+			</div>
 
-			{/* Analysis Section */}
-			<section className="mb-8">
-				<h2 className="text-2xl font-semibold mb-6">Task Analysis</h2>
-				<AnalysisSection
-					currentDate={currentDate}
-					progressData={progressData}
-				/>
-			</section>
+			{/* Progress Chart - Only show if there's progress data */}
+			{Object.keys(progressData).length > 0 && (
+				<section className="mb-8">
+					<Card>
+						<CardContent className="p-6">
+							<div className="flex justify-between items-center mb-6">
+								<h2 className="text-2xl font-semibold">
+									Progress History
+								</h2>
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={handleExport}
+								>
+									<Download className="w-4 h-4 mr-2" />
+									Export CSV
+								</Button>
+							</div>
+							<ProgressChart
+								progressData={progressData}
+								onDateClick={handleDateClick}
+							/>
+						</CardContent>
+					</Card>
+				</section>
+			)}
 
-			{/* Streak Stats */}
-			<section className="mb-8">
-				<StreakStats streakData={streakData} />
-			</section>
+			{/* Analysis Section - Only show if there's data */}
+			{tasks.length > 0 && Object.keys(progressData).length > 0 && (
+				<section className="mb-8">
+					<h2 className="text-2xl font-semibold mb-6">
+						Task Analysis
+					</h2>
+					<AnalysisSection
+						currentDate={currentDate}
+						progressData={progressData}
+					/>
+				</section>
+			)}
+
+			{/* Streak Stats - Only show if there's progress data */}
+			{Object.keys(progressData).length > 0 && (
+				<section className="mb-8">
+					<StreakStats streakData={streakData} />
+				</section>
+			)}
 
 			{/* Modals */}
 			{showCustomization && (
 				<ScheduleCustomization
 					tasks={tasks}
-					onTasksUpdate={handleTasksUpdate}
+					categories={categories}
+					onTaskCreate={createTask}
+					onTaskUpdate={updateTask}
+					onTaskDelete={deleteTask}
+					onCategoryCreate={createCategory}
+					onCategoryUpdate={updateCategory}
+					onCategoryDelete={deleteCategory}
 					onClose={() => setShowCustomization(false)}
 				/>
 			)}
@@ -484,6 +674,27 @@ function DashboardContent() {
 					userName={user?.user_metadata.full_name || ""}
 				/>
 			)}
+
+			{/* {showSmartAssistant && (
+				<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+					<div className="w-full max-w-2xl max-h-[90vh] overflow-hidden">
+						<SmartSchedulingAssistant
+							userId={user?.id || ""}
+							currentDate={currentDate}
+							onTimeSlotSelect={handleTimeSlotSelect}
+							className="bg-background"
+						/>
+						<div className="bg-background border-t p-4 flex justify-end">
+							<Button
+								variant="outline"
+								onClick={() => setShowSmartAssistant(false)}
+							>
+								Close
+							</Button>
+						</div>
+					</div>
+				</div>
+			)} */}
 		</div>
 	);
 }
