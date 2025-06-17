@@ -1,5 +1,13 @@
 import { UserPreferences, Schedule } from "@/app/lib/types";
-import { Brain, Calendar, CheckCircle, Clock, Target, Zap } from "lucide-react";
+import {
+	Brain,
+	Calendar,
+	CheckCircle,
+	Clock,
+	Target,
+	Zap,
+	AlertCircle,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 export const ProcessingStep = ({
@@ -14,107 +22,64 @@ export const ProcessingStep = ({
 	onPrevious: () => void;
 }) => {
 	const [progress, setProgress] = useState(0);
-	const [currentStep, setCurrentStep] = useState("");
-	const [isGenerating, setIsGenerating] = useState(false);
+	const [currentStep, setCurrentStep] = useState("Initializing...");
+	const [error, setError] = useState<string | null>(null);
 
 	const processingSteps = [
-		"Analyzing your commitments and preferences...",
-		"Identifying optimal time blocks...",
-		"Balancing work and personal goals...",
-		"Optimizing for your peak energy hours...",
-		"Generating your personalized schedule...",
-		"Adding finishing touches...",
+		{ text: "Analyzing your preferences...", duration: 1000 },
+		{ text: "Connecting to Atomic AI assistant...", duration: 1500 },
+		{ text: "Generating your personalized schedule...", duration: 3000 },
+		{ text: "Adding finishing touches...", duration: 1000 },
 	];
 
-	// Mock AI schedule generation
 	const generateSchedule = useCallback(async () => {
-		setIsGenerating(true);
+		setError(null);
 
+		// Simulate initial steps before the actual API call
 		for (let i = 0; i < processingSteps.length; i++) {
-			setCurrentStep(processingSteps[i]);
-			setProgress(((i + 1) / processingSteps.length) * 100);
-			await new Promise((resolve) => setTimeout(resolve, 1500));
+			setCurrentStep(processingSteps[i].text);
+			setProgress(((i + 1) / (processingSteps.length + 1)) * 100);
+			await new Promise((resolve) =>
+				setTimeout(resolve, processingSteps[i].duration)
+			);
 		}
 
-		// Generate mock schedule based on user preferences
-		const mockSchedule: Schedule = {
-			timeSlots: [
-				{
-					id: "1",
-					time: userData.sleepSchedule.wakeUpTime || "7:00",
-					activity: "Morning Routine",
-					description: "Wake up, hydration, light stretching",
-					category: "Personal Care",
-					duration: 30,
-					isCommitment: false,
+		try {
+			// Actual API call to our new backend route
+			const response = await fetch("/api/onboarding/generate-schedule", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
 				},
-				{
-					id: "2",
-					time: "7:30",
-					activity: "Breakfast",
-					description: "Healthy breakfast to fuel your day",
-					category: "Meals",
-					duration: 30,
-					isCommitment: false,
-				},
-				{
-					id: "3",
-					time: "8:00",
-					activity: "Deep Focus Block 1",
-					description:
-						"Your most important work when energy is highest",
-					category: "Work",
-					duration: 120,
-					isCommitment: false,
-				},
-				...userData.commitments.map((commitment, index) => ({
-					id: `commitment-${index}`,
-					time: commitment.preferredTime || "10:00",
-					activity: commitment.taskName,
-					description: `Fixed commitment - ${commitment.duration} minutes`,
-					category: "Commitment",
-					duration: commitment.duration,
-					isCommitment: true,
-					commitmentId: commitment.id,
-				})),
-				{
-					id: "4",
-					time: "12:00",
-					activity: "Lunch Break",
-					description: "Nutritious meal and mental break",
-					category: "Meals",
-					duration: 60,
-					isCommitment: false,
-				},
-				{
-					id: "5",
-					time: "13:00",
-					activity: userData.goals[0]?.name || "Goal Work",
-					description: `Dedicated time for: ${
-						userData.goals[0]?.name || "personal development"
-					}`,
-					category: "Goals",
-					duration: 60,
-					isCommitment: false,
-				},
-			],
-			summary: `Optimized schedule balancing ${userData.commitments.length} commitments with ${userData.goals.length} personal goals. Peak productivity hours aligned with your ${userData.workPreferences.workType} work style.`,
-			optimizationReasoning: `Based on your preference for ${userData.workPreferences.peakHours.join(
-				" and "
-			)} productivity, I've scheduled your most important work during these times. Your ${
-				userData.commitments.length
-			} fixed commitments are preserved, while
-			deep focus blocks are strategically placed for maximum effectiveness.`,
-			confidence: 0.87,
-		};
+				body: JSON.stringify(userData),
+			});
 
-		onScheduleGenerated(mockSchedule);
-		setIsGenerating(false);
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(
+					errorData.error || "Failed to generate schedule."
+				);
+			}
 
-		// Auto-advance after showing completion
-		setTimeout(() => {
-			onNext();
-		}, 2000);
+			const schedule: Schedule = await response.json();
+
+			// Finalize UI
+			setCurrentStep("Schedule generated successfully!");
+			setProgress(100);
+			onScheduleGenerated(schedule);
+
+			// Auto-advance after showing completion
+			setTimeout(() => {
+				onNext();
+			}, 2000);
+		} catch (err: any) {
+			console.error("Failed to generate schedule:", err);
+			setError(
+				err.message ||
+					"An error occurred while creating your schedule. Please try again."
+			);
+			setProgress(0); // Reset progress on error
+		}
 	}, [userData, onScheduleGenerated, onNext]);
 
 	useEffect(() => {
@@ -158,6 +123,28 @@ export const ProcessingStep = ({
 				</div>
 			</div>
 
+			{error && (
+				<div className="max-w-md mx-auto bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+					<div className="flex items-start gap-3">
+						<AlertCircle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+						<div>
+							<h3 className="font-medium text-destructive mb-1">
+								Generation Failed
+							</h3>
+							<p className="text-sm text-red-800 dark:text-red-200 mb-4">
+								{error}
+							</p>
+							<button
+								onClick={generateSchedule}
+								className="px-4 py-2 border border-border rounded-md hover:bg-secondary text-sm"
+							>
+								Retry Generation
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
 			<div className="bg-secondary/30 rounded-lg p-6 space-y-4">
 				<h3 className="font-semibold">What we're considering:</h3>
 				<div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
@@ -188,7 +175,7 @@ export const ProcessingStep = ({
 				</div>
 			</div>
 
-			{progress < 100 && (
+			{progress < 100 && !error && (
 				<div className="text-center">
 					<button
 						onClick={onPrevious}
@@ -196,20 +183,6 @@ export const ProcessingStep = ({
 					>
 						← Go back to make changes
 					</button>
-				</div>
-			)}
-
-			{progress === 100 && (
-				<div className="text-center space-y-3">
-					<div className="flex items-center justify-center gap-2 text-green-600">
-						<CheckCircle className="h-5 w-5" />
-						<span className="font-medium">
-							Schedule generated successfully!
-						</span>
-					</div>
-					<p className="text-sm text-muted-foreground">
-						Taking you to review your personalized schedule...
-					</p>
 				</div>
 			)}
 		</div>

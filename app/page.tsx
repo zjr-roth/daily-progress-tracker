@@ -22,11 +22,12 @@ import { ProgressChart } from "./components/ProgressChart";
 import { AnalysisSection } from "./components/AnalysisSection";
 import { StreakStats } from "./components/StreakStats";
 import { ScheduleCustomization } from "./components/ScheduleCustomization";
+import { LoadingScreen } from "./components/LoadingScreen";
 import { Button } from "./components/ui/button";
 import { Card, CardContent } from "./components/ui/card";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { useAuth } from "./contexts/AuthContext";
-import { Task } from "./lib/types";
+import { Task, TimeBlock, Schedule } from "./lib/types";
 import {
 	formatDisplayDate,
 	calculateCategoryStats,
@@ -36,6 +37,7 @@ import {
 	suggestAlternativeTimeSlotsWithDatabase,
 } from "./lib/utils";
 import Image from "next/image";
+import OnboardingContainer from "./components/onboarding/OnboardingContainer";
 
 const randomGreeting = [
 	"Hey",
@@ -95,12 +97,13 @@ function DashboardContent() {
 
 	// Local state for UI
 	const [showCustomization, setShowCustomization] = useState(false);
-	const [showAIOnboarding, setShowAIOnboarding] = useState(false);
-	const [aiMode, setAiMode] = useState<"onboarding" | "assistant">(
-		"onboarding"
-	);
+	const [showOnboarding, setShowOnboarding] = useState(false);
+	const [onboardingMode, setOnboardingMode] = useState<
+		"first-time" | "new-schedule"
+	>("first-time");
 	const [isNewUser, setIsNewUser] = useState(false);
 	const [hasShownOnboarding, setHasShownOnboarding] = useState(false);
+	const [scheduleGenerating, setScheduleGenerating] = useState(false);
 	const [timeConflictAlert, setTimeConflictAlert] = useState<{
 		show: boolean;
 		message: string;
@@ -114,7 +117,7 @@ function DashboardContent() {
 
 	// Check if user is new and should see onboarding
 	useEffect(() => {
-		if (user && tasks.length === 0 && !taskLoading && !hasShownOnboarding) {
+		if (user && !taskLoading && !hasShownOnboarding) {
 			// Check if user account was recently created (within last 24 hours)
 			const userCreatedAt = new Date(user.created_at);
 			const now = new Date();
@@ -125,8 +128,8 @@ function DashboardContent() {
 			if (hoursSinceCreation < 24 || tasks.length === 0) {
 				const timer = setTimeout(() => {
 					setIsNewUser(true);
-					setAiMode("onboarding");
-					setShowAIOnboarding(true);
+					setOnboardingMode("first-time");
+					setShowOnboarding(true);
 					setHasShownOnboarding(true);
 				}, 1500); // Show after 1.5 seconds to let the UI load
 				return () => clearTimeout(timer);
@@ -217,36 +220,51 @@ function DashboardContent() {
 		}
 	};
 
-	const handleScheduleGenerated = async (generatedSchedule: {
-		tasks: Task[];
-		insights: string[];
-		recommendations: string[];
-	}) => {
+	const handleScheduleGenerated = async (generatedSchedule: Schedule) => {
+		setScheduleGenerating(true);
+
 		try {
-			// Create new tasks from generated schedule
-			for (const task of generatedSchedule.tasks) {
+			// Convert schedule time slots to tasks
+			const tasks: Omit<Task, "id">[] = generatedSchedule.timeSlots.map(
+				(slot, index) => {
+					// Determine time block based on time
+					const timeBlock = determineTimeBlock(slot.time);
+
+					return {
+						name: slot.activity,
+						time: `${slot.time}-${addMinutesToTime(
+							slot.time,
+							slot.duration
+						)}`,
+						category: mapCategoryName(slot.category),
+						duration: slot.duration,
+						block: timeBlock,
+					};
+				}
+			);
+
+			// Create tasks in database
+			for (const task of tasks) {
 				await createTask(task);
 			}
 
-			setShowAIOnboarding(false);
+			setShowOnboarding(false);
 			setIsNewUser(false);
 			showToast(
 				"🎉 Your personalized schedule has been created! Welcome to Atomic!",
 				"success"
 			);
 		} catch (error: any) {
+			console.error("Error creating schedule tasks:", error);
 			showToast(error.message || "Failed to create AI schedule", "error");
+		} finally {
+			setScheduleGenerating(false);
 		}
 	};
 
-	const handleAIAssistantClick = () => {
-		setAiMode("assistant");
-		setShowAIOnboarding(true);
-	};
-
-	const handleNewUserOnboardingClick = () => {
-		setAiMode("onboarding");
-		setShowAIOnboarding(true);
+	const handleNewScheduleClick = () => {
+		setOnboardingMode("new-schedule");
+		setShowOnboarding(true);
 	};
 
 	const showToast = (
@@ -298,6 +316,25 @@ function DashboardContent() {
 
 	const loading = taskLoading || progressLoading;
 	const error = taskError || progressError;
+
+	// Show onboarding screen
+	if (showOnboarding) {
+		return (
+			<OnboardingContainer
+				onScheduleGenerated={handleScheduleGenerated}
+			/>
+		);
+	}
+
+	// Show loading screen during schedule generation
+	if (scheduleGenerating) {
+		return (
+			<LoadingScreen
+				message="Creating your personalized schedule..."
+				submessage="Our AI is setting up your tasks and optimizing your daily routine"
+			/>
+		);
+	}
 
 	return (
 		<div className="container mx-auto px-4 py-8 max-w-7xl">
@@ -509,7 +546,7 @@ function DashboardContent() {
 									<Button
 										variant="outline"
 										size="sm"
-										onClick={handleAIAssistantClick}
+										onClick={handleNewScheduleClick}
 									>
 										<Brain className="h-4 w-4 mr-2" />
 										AI Assistant
@@ -552,7 +589,7 @@ function DashboardContent() {
 					</section>
 				) : (
 					!isNewUser &&
-					!showAIOnboarding && (
+					!showOnboarding && (
 						<section>
 							<Card>
 								<CardContent className="p-12 text-center">
@@ -570,9 +607,7 @@ function DashboardContent() {
 										</p>
 										<div className="flex gap-3 justify-center">
 											<Button
-												onClick={
-													handleNewUserOnboardingClick
-												}
+												onClick={handleNewScheduleClick}
 											>
 												<Sparkles className="h-4 w-4 mr-2" />
 												Create with AI
@@ -658,6 +693,54 @@ function DashboardContent() {
 			)}
 		</div>
 	);
+}
+
+// Helper functions
+function determineTimeBlock(timeString: string): TimeBlock {
+	const hour = parseInt(timeString.split(":")[0]);
+	const isPM = timeString.includes("PM");
+
+	let hour24 = hour;
+	if (isPM && hour !== 12) hour24 += 12;
+	if (!isPM && hour === 12) hour24 = 0;
+
+	if (hour24 >= 6 && hour24 < 12) return "morning";
+	if (hour24 >= 12 && hour24 < 18) return "afternoon";
+	return "evening";
+}
+
+function addMinutesToTime(timeString: string, minutes: number): string {
+	const [time, period] = timeString.split(" ");
+	const [hours, mins] = time.split(":").map(Number);
+
+	let totalMinutes = (hours % 12) * 60 + mins + minutes;
+	if (period === "PM" && hours !== 12) totalMinutes += 12 * 60;
+	if (period === "AM" && hours === 12) totalMinutes -= 12 * 60;
+
+	const newHours = Math.floor(totalMinutes / 60) % 24;
+	const newMins = totalMinutes % 60;
+	const newPeriod = newHours >= 12 ? "PM" : "AM";
+	const displayHours =
+		newHours === 0 ? 12 : newHours > 12 ? newHours - 12 : newHours;
+
+	return `${displayHours}:${newMins
+		.toString()
+		.padStart(2, "0")} ${newPeriod}`;
+}
+
+function mapCategoryName(aiCategory: string): string {
+	const categoryMap: Record<string, string> = {
+		"Personal Care": "Personal",
+		Meals: "Personal",
+		Work: "Work",
+		Goals: "Personal Development",
+		Commitment: "Commitments",
+		Exercise: "Health & Fitness",
+		Learning: "Study",
+		Social: "Personal",
+	};
+
+	return categoryMap[aiCategory] || "Personal";
 }
 
 export default function HomePage() {

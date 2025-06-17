@@ -24,22 +24,30 @@ export const SleepPreferencesStep = ({
 	const calculateSleepDuration = () => {
 		if (!sleepSchedule.wakeUpTime || !sleepSchedule.bedTime) return 8;
 
-		const wake = new Date(`2000-01-01 ${sleepSchedule.wakeUpTime}`);
-		let bed = new Date(`2000-01-01 ${sleepSchedule.bedTime}`);
+		// Create date objects for calculation
+		const wakeTime = new Date(`1970-01-01T${sleepSchedule.wakeUpTime}:00`);
+		const bedTime = new Date(`1970-01-01T${sleepSchedule.bedTime}:00`);
 
-		// If bedtime is later than wake time, it's the next day
-		if (bed >= wake) {
-			bed = new Date(`2000-01-02 ${sleepSchedule.bedTime}`);
+		// Calculate the difference in milliseconds
+		let diff = wakeTime.getTime() - bedTime.getTime();
+
+		// If the difference is negative, it means the sleep period crosses midnight
+		if (diff < 0) {
+			diff += 24 * 60 * 60 * 1000; // Add 24 hours in milliseconds
 		}
 
-		const diff = wake.getTime() - bed.getTime();
-		return Math.round(diff / (1000 * 60 * 60));
+		// Convert milliseconds to hours and round to the nearest half hour
+		const hours = diff / (1000 * 60 * 60);
+		return Math.round(hours * 2) / 2;
 	};
 
 	useEffect(() => {
 		if (sleepSchedule.wakeUpTime && sleepSchedule.bedTime) {
 			const duration = calculateSleepDuration();
-			updateSchedule("sleepDuration", duration);
+			// Ensure duration is always positive before updating
+			if (duration > 0) {
+				updateSchedule("sleepDuration", duration);
+			}
 		}
 	}, [sleepSchedule.wakeUpTime, sleepSchedule.bedTime]);
 

@@ -1,8 +1,14 @@
+// middleware.ts - Fixed to allow API routes
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export async function middleware(req: NextRequest) {
+  // Skip middleware for API routes
+  if (req.nextUrl.pathname.startsWith('/api/')) {
+    return NextResponse.next()
+  }
+
   let res = NextResponse.next({
     request: {
       headers: req.headers,
@@ -40,7 +46,8 @@ export async function middleware(req: NextRequest) {
   // Auth condition check
   const isAuthPage = req.nextUrl.pathname.startsWith('/auth')
   const isPublicPath = req.nextUrl.pathname === '/auth' ||
-                       req.nextUrl.pathname.startsWith('/auth/')
+                       req.nextUrl.pathname.startsWith('/auth/') ||
+                       req.nextUrl.pathname === '/reset-password'
 
   // If user is signed in and trying to access auth pages, redirect to dashboard
   if (session && isAuthPage) {
@@ -59,10 +66,11 @@ export const config = {
   matcher: [
     /*
      * Match all request paths except for the ones starting with:
+     * - api (API routes) - IMPORTANT: This was missing!
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

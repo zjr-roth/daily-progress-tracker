@@ -1,8 +1,10 @@
+// app/contexts/AuthContext.tsx - Updated with onboarding state
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { User } from "@supabase/supabase-js";
 import { AuthService } from "../lib/auth";
+import { OnboardingService } from "../lib/services/onboardingService";
 
 interface FormErrors {
 	email?: string;
@@ -11,10 +13,17 @@ interface FormErrors {
 	confirmPassword?: string;
 }
 
+interface OnboardingState {
+	hasCompletedOnboarding: boolean;
+	isCheckingOnboardingStatus: boolean;
+	onboardingError: string | null;
+}
+
 interface AuthContextType {
 	user: User | null;
 	loading: boolean;
 	errors: FormErrors;
+	onboardingState: OnboardingState;
 	clearErrors: () => void;
 	signIn: (email: string, password: string) => Promise<void>;
 	signUp: (
@@ -24,6 +33,9 @@ interface AuthContextType {
 	) => Promise<void>;
 	signOut: () => Promise<void>;
 	resetPassword: (email: string) => Promise<void>;
+	checkOnboardingStatus: () => Promise<void>;
+	markOnboardingComplete: () => Promise<void>;
+	resetOnboarding: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -32,6 +44,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 	const [user, setUser] = useState<User | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [errors, setErrors] = useState<FormErrors>({});
+	const [onboardingState, setOnboardingState] = useState<OnboardingState>({
+		hasCompletedOnboarding: false,
+		isCheckingOnboardingStatus: false,
+		onboardingError: null,
+	});
 
 	const clearErrors = () => {
 		console.log("AuthContext: Clearing errors");
@@ -46,6 +63,87 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			return newErrors;
 		});
 	};
+
+	const checkOnboardingStatus = async () => {
+		if (!user?.id) return;
+
+		setOnboardingState((prev) => ({
+			...prev,
+			isCheckingOnboardingStatus: true,
+			onboardingError: null,
+		}));
+
+		try {
+			const hasCompleted = await OnboardingService.hasCompletedOnboarding(
+				user.id
+			);
+			setOnboardingState((prev) => ({
+				...prev,
+				hasCompletedOnboarding: hasCompleted,
+				isCheckingOnboardingStatus: false,
+			}));
+		} catch (error: any) {
+			console.error("Error checking onboarding status:", error);
+			setOnboardingState((prev) => ({
+				...prev,
+				isCheckingOnboardingStatus: false,
+				onboardingError:
+					error.message || "Failed to check onboarding status",
+			}));
+		}
+	};
+
+	const markOnboardingComplete = async () => {
+		if (!user?.id) return;
+
+		try {
+			await OnboardingService.completeOnboarding(user.id);
+			setOnboardingState((prev) => ({
+				...prev,
+				hasCompletedOnboarding: true,
+				onboardingError: null,
+			}));
+		} catch (error: any) {
+			console.error("Error marking onboarding complete:", error);
+			setOnboardingState((prev) => ({
+				...prev,
+				onboardingError:
+					error.message || "Failed to mark onboarding complete",
+			}));
+		}
+	};
+
+	const resetOnboarding = async () => {
+		if (!user?.id) return;
+
+		try {
+			await OnboardingService.resetOnboarding(user.id);
+			setOnboardingState((prev) => ({
+				...prev,
+				hasCompletedOnboarding: false,
+				onboardingError: null,
+			}));
+		} catch (error: any) {
+			console.error("Error resetting onboarding:", error);
+			setOnboardingState((prev) => ({
+				...prev,
+				onboardingError: error.message || "Failed to reset onboarding",
+			}));
+		}
+	};
+
+	// Check onboarding status when user changes
+	useEffect(() => {
+		if (user?.id) {
+			checkOnboardingStatus();
+		} else {
+			setOnboardingState({
+				hasCompletedOnboarding: false,
+				isCheckingOnboardingStatus: false,
+				onboardingError: null,
+			});
+		}
+	}, [user?.id]);
 
 	useEffect(() => {
 		// Get initial session
@@ -200,6 +298,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		clearErrors();
 		try {
 			await AuthService.signOut();
+			// Reset onboarding state on sign out
+			setOnboardingState({
+				hasCompletedOnboarding: false,
+				isCheckingOnboardingStatus: false,
+				onboardingError: null,
+			});
 		} catch (error) {
 			setLoading(false);
 			throw error;
@@ -222,11 +326,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		user,
 		loading,
 		errors,
+		onboardingState,
 		clearErrors,
 		signIn,
 		signUp,
 		signOut,
 		resetPassword,
+		checkOnboardingStatus,
+		markOnboardingComplete,
+		resetOnboarding,
 	};
 
 	return (
