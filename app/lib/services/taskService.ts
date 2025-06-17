@@ -81,6 +81,72 @@ export class TaskService {
     }
   }
 
+  static async createTasksFromSchedule(
+    userId: string,
+    timeSlots: any[]
+  ): Promise<Task[]> {
+    try {
+      const tasksToInsert = timeSlots.map((slot, index) => {
+        // The AI gives us the start time and duration directly.
+        const timeStart = `${slot.time}:00`;
+        const timeEnd = TaskService.addMinutesToTime(timeStart, slot.duration);
+
+        return {
+          user_id: userId,
+          name: slot.activity,
+          time_start: timeStart,
+          time_end: timeEnd,
+          // We will create tasks without a category for now, user can assign later.
+          // In a more advanced implementation, you'd match AI category to your DB categories.
+          category_id: null,
+          duration: slot.duration,
+          time_block: this.getTimeBlockFromTime(slot.time),
+          position: index,
+          is_active: true,
+          // Assuming the schedule is for today
+          scheduled_date: new Date().toISOString().split("T")[0],
+        };
+      });
+
+      const { data, error } = await supabase
+        .from("tasks")
+        .insert(tasksToInsert)
+        .select(`
+          *,
+          categories (
+            id,
+            name,
+            color,
+            bg_color,
+            text_color
+          )
+        `);
+
+      if (error) {
+        // The "range lower bound" error comes from here if time is invalid
+        console.error("Database batch insert error:", error);
+        throw new Error(error.message);
+      }
+
+      return data?.map(TaskService.transformDatabaseTaskToTask) || [];
+    } catch (error) {
+      console.error("Error creating tasks from schedule:", error);
+      throw error;
+    }
+  }
+
+  // Helper function to determine time block from a time string like "HH:MM"
+  static getTimeBlockFromTime(time: string): TimeBlock {
+    const [hours] = time.split(":").map(Number);
+    if (hours < 12) {
+      return "morning";
+    } else if (hours < 18) {
+      return "afternoon";
+    } else {
+      return "evening";
+    }
+  }
+
   static async createTask(
     userId: string,
     taskData: Omit<Task, 'id'> & {

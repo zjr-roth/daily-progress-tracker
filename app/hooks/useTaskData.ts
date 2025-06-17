@@ -51,6 +51,27 @@ export function useTaskData() {
     }
   }, [user?.id]);
 
+
+  const createTasksFromSchedule = useCallback(async (timeSlots: any[]) => {
+    if (!user?.id) return null;
+
+    setLoading(true);
+    setError(null);
+    try {
+      const newTasks = await TaskService.createTasksFromSchedule(user.id, timeSlots);
+      // Replace existing tasks with the new schedule
+      setTasks(newTasks);
+      return newTasks;
+    } catch (error: any) {
+      const errorMessage = error.message || "Failed to create schedule tasks";
+      setError(errorMessage);
+      throw new Error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id]);
+
+
   const createTask = useCallback(async (taskData: Omit<Task, 'id'>) => {
     if (!user?.id) return null;
 
@@ -261,6 +282,7 @@ export function useTaskData() {
     deleteCategory,
     getTasksByTimeBlock,
     refreshData,
+    createTasksFromSchedule,
   }), [
     tasks,
     categories,
@@ -275,5 +297,6 @@ export function useTaskData() {
     deleteCategory,
     getTasksByTimeBlock,
     refreshData,
+    createTasksFromSchedule,
   ]);
 }

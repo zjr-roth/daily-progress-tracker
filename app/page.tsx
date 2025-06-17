@@ -73,6 +73,7 @@ function DashboardContent() {
 		categories,
 		loading: taskLoading,
 		error: taskError,
+		createTasksFromSchedule,
 		createTask,
 		updateTask,
 		deleteTask,
@@ -222,31 +223,9 @@ function DashboardContent() {
 
 	const handleScheduleGenerated = async (generatedSchedule: Schedule) => {
 		setScheduleGenerating(true);
-
 		try {
-			// Convert schedule time slots to tasks
-			const tasks: Omit<Task, "id">[] = generatedSchedule.timeSlots.map(
-				(slot, index) => {
-					// Determine time block based on time
-					const timeBlock = determineTimeBlock(slot.time);
-
-					return {
-						name: slot.activity,
-						time: `${slot.time}-${addMinutesToTime(
-							slot.time,
-							slot.duration
-						)}`,
-						category: mapCategoryName(slot.category),
-						duration: slot.duration,
-						block: timeBlock,
-					};
-				}
-			);
-
-			// Create tasks in database
-			for (const task of tasks) {
-				await createTask(task);
-			}
+			// It calls the batch-creation function directly with the AI's timeSlots.
+			await createTasksFromSchedule(generatedSchedule.timeSlots);
 
 			setShowOnboarding(false);
 			setIsNewUser(false);
