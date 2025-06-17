@@ -1,4 +1,4 @@
-// app/page.tsx - Updated to support AI Assistant mode
+// app/page.tsx - Updated with proper onboarding integration
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -22,7 +22,6 @@ import { ProgressChart } from "./components/ProgressChart";
 import { AnalysisSection } from "./components/AnalysisSection";
 import { StreakStats } from "./components/StreakStats";
 import { ScheduleCustomization } from "./components/ScheduleCustomization";
-import { AIOnboardingFlow } from "./components/AIOnboardingFlow";
 import { Button } from "./components/ui/button";
 import { Card, CardContent } from "./components/ui/card";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
@@ -101,6 +100,7 @@ function DashboardContent() {
 		"onboarding"
 	);
 	const [isNewUser, setIsNewUser] = useState(false);
+	const [hasShownOnboarding, setHasShownOnboarding] = useState(false);
 	const [timeConflictAlert, setTimeConflictAlert] = useState<{
 		show: boolean;
 		message: string;
@@ -112,18 +112,27 @@ function DashboardContent() {
 		}>;
 	}>({ show: false, message: "", suggestions: [] });
 
-	// Check if user is new (has no tasks)
+	// Check if user is new and should see onboarding
 	useEffect(() => {
-		if (user && tasks.length === 0 && !taskLoading && !isNewUser) {
-			// Show AI onboarding for new users after a brief delay
-			const timer = setTimeout(() => {
-				setIsNewUser(true);
-				setAiMode("onboarding");
-				setShowAIOnboarding(true);
-			}, 1000);
-			return () => clearTimeout(timer);
+		if (user && tasks.length === 0 && !taskLoading && !hasShownOnboarding) {
+			// Check if user account was recently created (within last 24 hours)
+			const userCreatedAt = new Date(user.created_at);
+			const now = new Date();
+			const hoursSinceCreation =
+				(now.getTime() - userCreatedAt.getTime()) / (1000 * 60 * 60);
+
+			// Show onboarding for new users (created within last 24 hours) or users with no tasks
+			if (hoursSinceCreation < 24 || tasks.length === 0) {
+				const timer = setTimeout(() => {
+					setIsNewUser(true);
+					setAiMode("onboarding");
+					setShowAIOnboarding(true);
+					setHasShownOnboarding(true);
+				}, 1500); // Show after 1.5 seconds to let the UI load
+				return () => clearTimeout(timer);
+			}
 		}
-	}, [user, tasks, taskLoading, isNewUser]);
+	}, [user, tasks, taskLoading, hasShownOnboarding]);
 
 	// Don't render anything until currentDate is set to avoid hydration issues
 	if (!currentDate) {
@@ -133,7 +142,7 @@ function DashboardContent() {
 					<div className="text-center">
 						<Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
 						<div className="text-lg text-muted-foreground">
-							Loading...
+							Loading your dashboard...
 						</div>
 					</div>
 				</div>
@@ -220,8 +229,9 @@ function DashboardContent() {
 			}
 
 			setShowAIOnboarding(false);
+			setIsNewUser(false);
 			showToast(
-				"Your personalized schedule has been created! 🎉",
+				"🎉 Your personalized schedule has been created! Welcome to Atomic!",
 				"success"
 			);
 		} catch (error: any) {
@@ -262,7 +272,7 @@ function DashboardContent() {
 					}
 				}, 300);
 			}
-		}, 3000);
+		}, 4000);
 	};
 
 	const handleDateClick = (date: string) => {
@@ -462,8 +472,9 @@ function DashboardContent() {
 											No tasks yet!
 										</p>
 										<p className="text-sm">
-											Create your first schedule to get
-											started
+											{isNewUser
+												? "Your AI assistant will help you create your first schedule"
+												: "Create your first schedule to get started"}
 										</p>
 									</div>
 								)}
@@ -540,43 +551,47 @@ function DashboardContent() {
 						</div>
 					</section>
 				) : (
-					<section>
-						<Card>
-							<CardContent className="p-12 text-center">
-								<div className="max-w-md mx-auto">
-									<div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-										<Plus className="h-8 w-8 text-primary" />
+					!isNewUser &&
+					!showAIOnboarding && (
+						<section>
+							<Card>
+								<CardContent className="p-12 text-center">
+									<div className="max-w-md mx-auto">
+										<div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+											<Plus className="h-8 w-8 text-primary" />
+										</div>
+										<h3 className="text-xl font-semibold mb-2">
+											Ready to get organized?
+										</h3>
+										<p className="text-muted-foreground mb-6">
+											Create your personalized daily
+											schedule to start tracking your
+											productivity
+										</p>
+										<div className="flex gap-3 justify-center">
+											<Button
+												onClick={
+													handleNewUserOnboardingClick
+												}
+											>
+												<Sparkles className="h-4 w-4 mr-2" />
+												Create with AI
+											</Button>
+											<Button
+												variant="outline"
+												onClick={() =>
+													setShowCustomization(true)
+												}
+											>
+												<Plus className="h-4 w-4 mr-2" />
+												Add Manually
+											</Button>
+										</div>
 									</div>
-									<h3 className="text-xl font-semibold mb-2">
-										Ready to get organized?
-									</h3>
-									<p className="text-muted-foreground mb-6">
-										Create your personalized daily schedule
-										to start tracking your productivity
-									</p>
-									<div className="flex gap-3 justify-center">
-										<Button
-											onClick={
-												handleNewUserOnboardingClick
-											}
-										>
-											<Sparkles className="h-4 w-4 mr-2" />
-											Create with AI
-										</Button>
-										<Button
-											variant="outline"
-											onClick={() =>
-												setShowCustomization(true)
-											}
-										>
-											<Plus className="h-4 w-4 mr-2" />
-											Add Manually
-										</Button>
-									</div>
-								</div>
-							</CardContent>
-						</Card>
-					</section>
+								</CardContent>
+							</Card>
+						</section>
+					)
 				)}
 			</div>
 
@@ -639,16 +654,6 @@ function DashboardContent() {
 					onCategoryUpdate={updateCategory}
 					onCategoryDelete={deleteCategory}
 					onClose={() => setShowCustomization(false)}
-				/>
-			)}
-
-			{showAIOnboarding && (
-				<AIOnboardingFlow
-					mode={aiMode}
-					currentTasks={tasks}
-					onScheduleGenerated={handleScheduleGenerated}
-					onClose={() => setShowAIOnboarding(false)}
-					userName={user?.user_metadata.full_name || ""}
 				/>
 			)}
 		</div>
