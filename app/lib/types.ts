@@ -57,9 +57,64 @@ export interface DatabaseTask {
   };
 }
 
+export interface Commitment {
+  id: string;
+  taskName: string;
+  duration: number;
+  preferredTime: string;
+  days: string[];
+  priority: 'high' | 'medium' | 'low';
+}
+
+export interface Goal {
+  id: string;
+  name: string;
+  category: string;
+  priority: number;
+}
+
+export interface SleepPreferences {
+  wakeUpTime: string;
+  bedTime: string;
+  sleepDuration: number;
+}
+
+export interface WorkPreferences {
+  workType: string;
+  peakHours: string[];
+  breakPreference: string;
+  focusBlocks: number;
+}
+
+export interface MealPreferences {
+  breakfast: string;
+  lunch: string;
+  dinner: string;
+}
+
+export interface UserPreferences {
+  commitments: Commitment[];
+  goals: Goal[];
+  customGoals: string;
+  sleepSchedule: SleepPreferences;
+  workPreferences: WorkPreferences;
+  mealTimes: MealPreferences;
+}
+
 export interface TimeSlot {
-  start_time: string;
-  end_time: string;
-  duration_minutes: number;
-  time_block: TimeBlock;
+  id: string;
+  time: string;
+  activity: string;
+  description: string;
+  category: string;
+  duration: number;
+  isCommitment: boolean;
+  commitmentId?: string;
+}
+
+export interface Schedule {
+  timeSlots: TimeSlot[];
+  summary: string;
+  optimizationReasoning: string;
+  confidence: number;
 }
