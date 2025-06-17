@@ -1,6 +1,8 @@
-// app/lib/services/perplexityService.ts - FIXED VERSION
+// app/lib/services/perplexityService.ts - UPDATED FOR CURRENT API
 import { Task, TimeBlock } from '../types';
 
+
+// This is where all the problems mostly are. Way to many hardcoded items and not enough AI processing. THe AI should be able to stream the response and not have to wait for the entire response to be generated. The AI should be able to handle the conversation with the correct prompting. It should be working and if it is not the fallback message should just be "systems are down, please try again later.
 interface UserInputs {
   constraints: string;
   goals: string;
@@ -42,6 +44,35 @@ interface ResearchResponse {
   scientificBacking: string[];
 }
 
+// Updated to match current Perplexity API response format
+interface PerplexityResponse {
+  id: string;
+  model: string;
+  object: string;
+  created_at: number;
+  output: Array<{
+    id: string;
+    type: string;
+    status: string;
+    content: Array<{
+      type: string;
+      text: string;
+      annotations?: any[];
+    }>;
+  }>;
+  search_results?: Array<{
+    title: string;
+    url: string;
+    date?: string;
+  }>;
+  usage: {
+    input_tokens: number;
+    output_tokens: number;
+    reasoning_tokens?: number;
+    search_queries?: number;
+  };
+}
+
 export class PerplexityService {
   private static readonly API_BASE_URL = 'https://api.perplexity.ai/chat/completions';
   private static readonly API_KEY = process.env.PERPLEXITY_API_KEY;
@@ -53,14 +84,15 @@ export class PerplexityService {
     }
 
     const requestBody: any = {
-      model: 'llama-3.1-sonar-small-128k-online',
+      model: 'sonar-pro', // Updated to current model
       messages,
       max_tokens: 2000,
       temperature: 0.2,
       top_p: 0.9,
-      return_citations: true,
       search_domain_filter: ["pubmed.ncbi.nlm.nih.gov", "scholar.google.com", "harvard.edu", "stanford.edu"],
-      search_recency_filter: "year"
+      web_search_options: {
+        search_context_size: "medium" // Updated parameter structure
+      }
     };
 
     if (responseFormat) {
@@ -82,8 +114,19 @@ export class PerplexityService {
       throw new Error(`API_ERROR: ${response.status}`);
     }
 
-    const data = await response.json();
+    const data: PerplexityResponse = await response.json();
     return data;
+  }
+
+  // Helper to extract content from new response format
+  private static extractContent(response: PerplexityResponse): string {
+    if (response.output && response.output.length > 0) {
+      const firstOutput = response.output[0];
+      if (firstOutput.content && firstOutput.content.length > 0) {
+        return firstOutput.content[0].text;
+      }
+    }
+    throw new Error('Invalid response format from Perplexity API');
   }
 
   // FIXED: Accept goals as string instead of array
@@ -128,7 +171,7 @@ export class PerplexityService {
         type: "json_object"
       });
 
-      const content = response.choices[0].message.content;
+      const content = this.extractContent(response);
       return JSON.parse(content);
     } catch (error: any) {
       console.error('Error researching practices:', error);
@@ -200,7 +243,7 @@ Focus on evidence-based scheduling that aligns with the user's goals and constra
         type: "json_object"
       });
 
-      const content = response.choices[0].message.content;
+      const content = this.extractContent(response);
 
       try {
         const parsed = JSON.parse(content);
@@ -274,7 +317,7 @@ ${tasksDescription}
         type: "json_object"
       });
 
-      const content = response.choices[0].message.content;
+      const content = this.extractContent(response);
       return JSON.parse(content);
     } catch (error: any) {
       console.error('Error optimizing schedule:', error);

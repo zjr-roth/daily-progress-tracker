@@ -2,12 +2,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PerplexityService } from '../../../lib/services/perplexityService';
 
+// All the problems for the APIs are in the PerplexityService.ts file.
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { goals } = body;
 
-    // FIXED: Accept goals as string (natural language) instead of requiring array
+
     if (!goals || typeof goals !== 'string') {
       return NextResponse.json(
         { error: 'Goals string is required' },

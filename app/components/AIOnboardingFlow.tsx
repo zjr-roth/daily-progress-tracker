@@ -137,13 +137,13 @@ export function AIOnboardingFlow({
 		],
 	};
 
-	// FIXED: Prevent duplicate initialization and messages
+	// Need to fix this so that it doesn't initialize the conversation twice. Getting duplicate intro messages.
 	useEffect(() => {
 		if (!hasInitialized) {
 			setHasInitialized(true);
 			initializeConversation();
 		}
-	}, [hasInitialized, userName, mode]);
+	}, [hasInitialized]);
 
 	useEffect(() => {
 		scrollToBottom();
@@ -153,7 +153,7 @@ export function AIOnboardingFlow({
 		messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
 	};
 
-	// FIXED: Separate initialization function to prevent duplicate messages
+	// These are the messages that are getting duplicated when the conversation is initialized.
 	const initializeConversation = () => {
 		if (mode === "onboarding") {
 			addMessage({
@@ -184,6 +184,7 @@ export function AIOnboardingFlow({
 		setMessages((prev) => [...prev, newMessage]);
 	};
 
+	// This should be sent to the API. not a simulated AI Processing delay.
 	const handleSendMessage = async () => {
 		if (!currentInput.trim()) return;
 
@@ -205,6 +206,7 @@ export function AIOnboardingFlow({
 		setIsTyping(false);
 	};
 
+	// This is the onboarding flow. Shouldn't have hardcoded messages. The AI should be able to handle the conversation with the correct prompting.
 	const processOnboardingInput = async (input: string) => {
 		switch (currentStep) {
 			case 0: // Constraints
@@ -291,7 +293,7 @@ export function AIOnboardingFlow({
 		}
 	};
 
-	// FIXED: Accept goals as string and handle API failures gracefully
+	// FIXED: This is where the API is failing. Most likely something within the api/ai/research route.
 	const performGoalResearch = async (goals: string) => {
 		setIsResearching(true);
 		try {
@@ -301,7 +303,7 @@ export function AIOnboardingFlow({
 					"Content-Type": "application/json",
 				},
 				body: JSON.stringify({
-					goals: goals, // FIXED: Send as string, not array
+					goals: goals,
 				}),
 			});
 
@@ -311,7 +313,6 @@ export function AIOnboardingFlow({
 
 			const result = await response.json();
 
-			// FIXED: Handle both success and error responses properly
 			if (!result.success) {
 				throw new Error(result.error || "Research request failed");
 			}
@@ -319,7 +320,7 @@ export function AIOnboardingFlow({
 			const data = result.data;
 			setResearchResults(data);
 
-			// Create insights message
+			// This should also be handled by the AI.
 			const insights = [
 				"🧠 **Research-Based Insights:**",
 				...data.practices.slice(0, 3),
@@ -352,7 +353,7 @@ export function AIOnboardingFlow({
 		} catch (error) {
 			console.error("Research failed:", error);
 
-			// FIXED: Provide helpful fallback message instead of error
+			// Shouldn't need this fallback message. The AI should be able to handle the conversation with the correct prompting. It should be working and if it is not the fallback message should just be "systems are down, please try again later."
 			addMessage({
 				type: "ai",
 				content: `I'll continue with general best practices for your goals. Based on productivity research, here are some key principles:\n\n🧠 **Core Strategies:**\n• Schedule demanding tasks during your peak energy hours\n• Use time-blocking to create structure and reduce decision fatigue\n• Include regular breaks to maintain cognitive performance\n\n📊 **Recommended Allocations:**\n• Deep work: 2-3 hour blocks\n• Learning: 60-90 minute sessions\n• Breaks: 15-20 minutes every 90 minutes`,
@@ -371,6 +372,7 @@ export function AIOnboardingFlow({
 		}
 	};
 
+	// This is where the API is failing. Most likely something within the api/ai/optimize route.
 	const optimizeCurrentSchedule = async (optimizationGoal: string) => {
 		setIsGenerating(true);
 		addMessage({
@@ -434,7 +436,7 @@ export function AIOnboardingFlow({
 			setIsGenerating(false);
 		}
 	};
-
+	// Haven't made it this far yet since both the other API calls are failing.
 	const generateAISchedule = async () => {
 		setIsGenerating(true);
 
@@ -487,6 +489,7 @@ export function AIOnboardingFlow({
 
 			setGeneratedSchedule(schedule);
 
+			// This should also be handled by the AI. Not hardcoded messages.
 			addMessage({
 				type: "ai",
 				content: `🎉 Your personalized schedule is ready! I've created a balanced daily routine based on your preferences and productivity research:\n\n✅ Optimized for your productive hours and constraints\n✅ Incorporates research-backed practices for your goals\n✅ Includes your preferred work style and timing\n✅ Balances work, personal time, and breaks\n\nYou can review the full schedule below. Would you like to use this schedule?`,
@@ -510,11 +513,13 @@ export function AIOnboardingFlow({
 		const profile = userProfile;
 		const baseTasks: Omit<Task, "id">[] = [];
 
+		// Dont default to 7 AM. The AI should be able to suggest a wake time based on the user's preferences. If the user does not like the wake time, they can reprompt to change it.
 		// Parse wake time or default to 7 AM
 		const wakeTimeMatch = profile.wakeTime.match(/(\d{1,2})/);
 		const wakeHour = wakeTimeMatch ? parseInt(wakeTimeMatch[1]) : 7;
 		const adjustedWakeHour = Math.max(6, Math.min(10, wakeHour));
 
+		// None of this below should be hardcoded and included. The AI will generate the schedule based on what the users inputs are.
 		// Morning routine (always included)
 		baseTasks.push({
 			name: "Morning Routine & Planning",
@@ -677,6 +682,7 @@ export function AIOnboardingFlow({
 			id: `fallback-task-${index}-${Date.now()}`,
 		}));
 
+		// This should also be handled by the AI. Not hardcoded messages.
 		const insights = [
 			`Optimized for your ${profile.wakeTime} wake time and work schedule`,
 			`Focused on your key goals: ${profile.goals}`,
@@ -685,6 +691,7 @@ export function AIOnboardingFlow({
 			`Includes strategic breaks to maintain energy throughout the day`,
 		];
 
+		// This should also be handled by the AI. Not hardcoded messages.
 		const recommendations = [
 			"Try this schedule for a week and track how you feel",
 			"Adjust task timing based on your energy levels throughout the day",
@@ -718,7 +725,7 @@ export function AIOnboardingFlow({
 			content: "Let me create a different schedule variation for you...",
 		});
 
-		// Add slight variation to user profile for different results
+		// This should also be handled by the AI. Not hardcoded messages with slight variations.
 		const variedProfile = {
 			...userProfile,
 			workStyle: userProfile.workStyle + " with more flexibility",
@@ -774,7 +781,7 @@ export function AIOnboardingFlow({
 		});
 		setIsGenerating(false);
 	};
-
+	// This is the UI. For Onboarding, the UI should be the whole page and not just a modal. Once finished it should show the preview of the schedule. If user clicks accept, it should show the schedule in the home page and the onboarding flow should be closed. If there is a delay in generating the schedule, the user should be taken to a loading screen with a circle animation for loading until the schedule and home page are rendered. 
 	return (
 		<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
 			<Card className="w-full max-w-4xl max-h-[90vh] overflow-hidden">

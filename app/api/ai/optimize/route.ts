@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PerplexityService } from '../../../lib/services/perplexityService';
 
+// All the problems for the APIs are in the PerplexityService.ts file. 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
