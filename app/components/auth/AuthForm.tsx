@@ -39,6 +39,14 @@ export function AuthForm({
 		password?: string;
 	}>({});
 
+	const ShowAlert = () => {
+		<EmailVerificationAlert
+			email={formData.email}
+			onBackToSignIn={onToggleMode}
+			onResendEmail={handleResendEmail}
+		/>;
+	};
+
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		console.log("AuthForm: Form submitted, current mode:", mode);
@@ -273,7 +281,12 @@ export function AuthForm({
 						</div>
 					)}
 
-					<Button type="submit" className="w-full" disabled={loading}>
+					<Button
+						type="submit"
+						onClick={ShowAlert}
+						className="w-full"
+						disabled={loading}
+					>
 						{loading && (
 							<Loader2 className="mr-2 h-4 w-4 animate-spin" />
 						)}

@@ -108,16 +108,16 @@ export class OnboardingService {
   static async completeOnboarding(userId: string): Promise<void> {
     try {
       const { error } = await supabase
-        .from('user_preferences')
+        .from('users_data')
         .update({
           onboarding_completed: true,
           onboarding_completed_at: new Date().toISOString(),
         })
-        .eq('user_id', userId);
+        .eq('id', userId);
 
       if (error) throw error;
 
-      console.log('Onboarding marked as completed');
+      console.log('Onboarding status marked as completed in users_data table');
     } catch (error) {
       console.error('Error completing onboarding:', error);
       throw error;
@@ -130,9 +130,9 @@ export class OnboardingService {
   static async hasCompletedOnboarding(userId: string): Promise<boolean> {
     try {
       const { data, error } = await supabase
-        .from('user_preferences')
+        .from('users_data')
         .select('onboarding_completed')
-        .eq('user_id', userId)
+        .eq('id', userId)
         .single();
 
       if (error) {
@@ -161,7 +161,7 @@ export class OnboardingService {
   }> {
     try {
       const { data, error } = await supabase
-        .from('user_preferences')
+        .from('users_data')
         .select('*')
         .eq('user_id', userId)
         .single();
@@ -219,7 +219,7 @@ export class OnboardingService {
   static async resetOnboarding(userId: string): Promise<void> {
     try {
       const { error } = await supabase
-        .from('user_preferences')
+        .from('users_data')
         .update({
           onboarding_completed: false,
           onboarding_completed_at: null,
@@ -242,7 +242,7 @@ export class OnboardingService {
   static async deleteUserPreferences(userId: string): Promise<void> {
     try {
       const { error } = await supabase
-        .from('user_preferences')
+        .from('users_data')
         .delete()
         .eq('user_id', userId);
 
