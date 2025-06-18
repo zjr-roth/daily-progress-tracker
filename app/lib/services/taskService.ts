@@ -81,71 +81,91 @@ export class TaskService {
     }
   }
 
-  static async createTasksFromSchedule(
-    userId: string,
-    timeSlots: any[]
-  ): Promise<Task[]> {
-    try {
-      const tasksToInsert = timeSlots.map((slot, index) => {
-        // The AI gives us the start time and duration directly.
-        const timeStart = `${slot.time}:00`;
-        const timeEnd = TaskService.addMinutesToTime(timeStart, slot.duration);
+    // Helper function to determine time block from a time string like "HH:MM"
+    static getTimeBlockFromTime(time: string): TimeBlock {
+      const [hours] = time.split(":").map(Number);
+      if (hours < 12) {
+        return "morning";
+      } else if (hours < 18) {
+        return "afternoon";
+      } else {
+        return "evening";
+      }
+    }
 
-        return {
-          user_id: userId,
-          name: slot.activity,
-          time_start: timeStart,
-          time_end: timeEnd,
-          // We will create tasks without a category for now, user can assign later.
-          // In a more advanced implementation, you'd match AI category to your DB categories.
-          category_id: null,
-          duration: slot.duration,
-          time_block: this.getTimeBlockFromTime(slot.time),
-          position: index,
-          is_active: true,
-          // Assuming the schedule is for today
-          scheduled_date: new Date().toISOString().split("T")[0],
-        };
-      });
+    // Fixed version of createTasksFromSchedule in taskService.ts
 
-      const { data, error } = await supabase
-        .from("tasks")
-        .insert(tasksToInsert)
-        .select(`
-          *,
-          categories (
-            id,
-            name,
-            color,
-            bg_color,
-            text_color
-          )
-        `);
+static async createTasksFromSchedule(
+  userId: string,
+  timeSlots: any[]
+): Promise<Task[]> {
+  try {
+    const scheduledDate = new Date().toISOString().split("T")[0];
 
-      if (error) {
-        // The "range lower bound" error comes from here if time is invalid
-        console.error("Database batch insert error:", error);
-        throw new Error(error.message);
+    // Delete existing tasks for the date
+    await supabase
+      .from('tasks')
+      .delete()
+      .eq('user_id', userId)
+      .eq('scheduled_date', scheduledDate);
+
+    if (!timeSlots || timeSlots.length === 0) return [];
+
+    const tasksToInsert = timeSlots.map((slot, index) => {
+      // Parse the time and ensure it's in HH:MM format
+      let timeStart: string;
+      if (slot.time.includes(':')) {
+        // Already in HH:MM format
+        timeStart = slot.time.length === 4 ? `0${slot.time}:00` : `${slot.time}:00`;
+      } else {
+        // Handle other formats if needed
+        timeStart = `${slot.time}:00`;
       }
 
-      return data?.map(TaskService.transformDatabaseTaskToTask) || [];
-    } catch (error) {
-      console.error("Error creating tasks from schedule:", error);
-      throw error;
-    }
-  }
+      // Calculate end time without subtracting seconds
+      const startDate = new Date(`1970-01-01T${timeStart}`);
+      const endDate = new Date(startDate.getTime() + (slot.duration * 60 * 1000));
 
-  // Helper function to determine time block from a time string like "HH:MM"
-  static getTimeBlockFromTime(time: string): TimeBlock {
-    const [hours] = time.split(":").map(Number);
-    if (hours < 12) {
-      return "morning";
-    } else if (hours < 18) {
-      return "afternoon";
-    } else {
-      return "evening";
+      // Format end time properly
+      const timeEnd = endDate.toTimeString().split(' ')[0]; // This gives HH:MM:SS
+
+      console.log(`Creating task: ${slot.activity} from ${timeStart} to ${timeEnd} (${slot.duration} minutes)`);
+
+      return {
+        user_id: userId,
+        name: slot.activity,
+        time_start: timeStart,
+        time_end: timeEnd,
+        category_id: null,
+        duration: slot.duration,
+        time_block: this.getTimeBlockFromTime(slot.time),
+        position: index,
+        is_active: true,
+        scheduled_date: scheduledDate,
+      };
+    });
+
+    console.log('Tasks to insert:', tasksToInsert);
+
+    const { data, error } = await supabase
+      .from("tasks")
+      .insert(tasksToInsert)
+      .select(`*, categories (*)`);
+
+    if (error) {
+      console.error('Database error:', error);
+      throw new Error(`Failed to save new schedule: ${error.message}`);
     }
+
+    return data?.map(TaskService.transformDatabaseTaskToTask) || [];
+  } catch (error) {
+    console.error("Error creating tasks from schedule:", error);
+    throw error;
   }
+}
+
+
+
 
   static async createTask(
     userId: string,
@@ -158,7 +178,12 @@ export class TaskService {
     try {
       // First check if time slot is available using basic validation
       const timeStart = TaskService.extractTimeFromTimeString(taskData.time);
-      const timeEnd = TaskService.addMinutesToTime(timeStart, taskData.duration);
+
+      const endDate = new Date(`1970-01-01T${timeStart}`);
+      endDate.setMinutes(endDate.getMinutes() + taskData.duration);
+      endDate.setSeconds(endDate.getSeconds() - 1); // Subtract 1 second for DB
+
+      const timeEnd = endDate.toTimeString().split(' ')[0];
 
       // Basic conflict check with existing tasks
       const existingTasks = await this.getUserTasks(userId, taskData.scheduledDate);
@@ -201,25 +226,24 @@ export class TaskService {
         .select(`
           *,
           categories (
-            id,
-            name,
-            color,
-            bg_color,
-            text_color
+           *
           )
         `)
         .single();
 
       if (error) {
-        console.error('Database error:', error);
+        if (error.message.includes('exclusion constraint')) {
+            throw new Error(`This time slot overlaps with an existing task.`);
+        }
         throw new Error(`Failed to create task: ${error.message}`);
       }
 
-      return TaskService.transformDatabaseTaskToTask(data);
-    } catch (error) {
-      console.error('Error creating task:', error);
-      throw error;
-    }
+        return TaskService.transformDatabaseTaskToTask(data);
+
+      } catch (error) {
+        console.error('Error in TaskService.createTask:', error);
+        throw error;
+      }
   }
 
   static async updateTask(
@@ -794,14 +818,24 @@ export class TaskService {
   }
 
   static formatTimeRange(startTime: string, endTime: string): string {
-    const formatTime = (time: string) => {
-      const [hours, minutes] = time.split(':').map(Number);
+    const formatTime = (time: string, isEndTime: boolean = false) => {
+      let [hours, minutes, seconds] = time.split(':').map(Number);
+
+      // If the end time is XX:XX:59, round up for display
+      if (isEndTime && seconds === 59) {
+        const d = new Date();
+        d.setHours(hours, minutes, seconds);
+        d.setSeconds(d.getSeconds() + 1);
+        hours = d.getHours();
+        minutes = d.getMinutes();
+      }
+
       const period = hours >= 12 ? 'PM' : 'AM';
       const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
       return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
     };
 
-    return `${formatTime(startTime)}-${formatTime(endTime)}`;
+    return `${formatTime(startTime)}-${formatTime(endTime, true)}`;
   }
 
   static async getNextPositionForTimeBlock(
