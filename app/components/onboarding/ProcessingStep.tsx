@@ -105,7 +105,7 @@ export const ProcessingStep = ({
 			<div className="space-y-8 max-w-2xl mx-auto px-6 text-center">
 				{/* Main Icon with Animation */}
 				<div className="relative">
-					<div className="w-24 h-24 mx-auto bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-700 rounded-3xl flex items-center justify-center shadow-2xl">
+					<div className="w-24 h-24 mx-auto bg-gradient-to-br from-[#FF7308] via-[#C13729] to-[#841436] rounded-3xl flex items-center justify-center shadow-2xl">
 						{progress === 100 ? (
 							<CheckCircle className="h-12 w-12 text-white" />
 						) : (
@@ -113,12 +113,12 @@ export const ProcessingStep = ({
 						)}
 					</div>
 					{/* Animated glow */}
-					<div className="absolute inset-0 w-24 h-24 mx-auto bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-700 rounded-3xl opacity-20 blur-xl animate-pulse"></div>
+					<div className="absolute inset-0 w-24 h-24 mx-auto bg-gradient-to-br from-[#FF7308] via-[#C13729] to-[#841436] rounded-3xl opacity-20 blur-xl animate-pulse"></div>
 
 					{/* Success sparkles */}
 					{progress === 100 && (
 						<div className="absolute -top-2 -right-2">
-							<Sparkles className="h-8 w-8 text-yellow-500 animate-bounce" />
+							<Sparkles className="h-8 w-8 text-[#FF7308] animate-bounce" />
 						</div>
 					)}
 				</div>
@@ -142,16 +142,11 @@ export const ProcessingStep = ({
 					<div className="relative">
 						<div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 overflow-hidden">
 							<div
-								className="bg-gradient-to-r from-purple-500 via-blue-500 to-indigo-500 h-4 rounded-full transition-all duration-1000 ease-out relative"
+								className="bg-gradient-to-r from-[#FF7308] via-[#C13729] to-[#841436] h-4 rounded-full transition-all duration-1000 ease-out relative"
 								style={{ width: `${progress}%` }}
 							>
 								<div className="absolute inset-0 bg-white/20 animate-pulse rounded-full"></div>
 							</div>
-						</div>
-						<div className="absolute -top-8 left-0 right-0 text-center">
-							<span className="inline-block bg-white dark:bg-gray-800 px-3 py-1 rounded-full text-sm font-medium text-gray-700 dark:text-gray-300 shadow-lg">
-								{Math.round(progress)}% Complete
-							</span>
 						</div>
 					</div>
 
@@ -194,7 +189,7 @@ export const ProcessingStep = ({
 				{/* What we're considering */}
 				<div className="bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-3xl p-8">
 					<h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-6 flex items-center justify-center gap-2">
-						<Bot className="h-5 w-5 text-blue-500" />
+						<Bot className="h-5 w-5 text-[#C13729]" />
 						What our AI is considering
 					</h3>
 					<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -202,22 +197,22 @@ export const ProcessingStep = ({
 							{
 								icon: Calendar,
 								label: `${userData.commitments.length} fixed commitments`,
-								color: "text-blue-500",
+								color: "text-[#FF7308]",
 							},
 							{
 								icon: Target,
 								label: `${userData.goals.length} personal goals`,
-								color: "text-green-500",
+								color: "text-[#E05C04]",
 							},
 							{
 								icon: Clock,
 								label: `Sleep: ${userData.sleepSchedule.wakeUpTime} - ${userData.sleepSchedule.bedTime}`,
-								color: "text-purple-500",
+								color: "text-[#C13729]",
 							},
 							{
 								icon: Zap,
 								label: `${userData.workPreferences.peakHours.length} peak productivity hours`,
-								color: "text-yellow-500",
+								color: "text-[#A32530]",
 							},
 						].map((item, index) => (
 							<div

@@ -124,7 +124,7 @@ export const WorkPreferencesStep = ({
 		<div className="space-y-8 max-w-4xl mx-auto">
 			{/* Header */}
 			<div className="text-center space-y-4">
-				<div className="w-16 h-16 mx-auto bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
+				<div className="w-16 h-16 mx-auto bg-gradient-to-br from-[#FF7308] to-[#A32530] rounded-2xl flex items-center justify-center shadow-lg">
 					<Briefcase className="h-8 w-8 text-white" />
 				</div>
 				<div>
@@ -141,7 +141,7 @@ export const WorkPreferencesStep = ({
 			{/* Work Type */}
 			<div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-sm border border-gray-200 dark:border-gray-700">
 				<div className="flex items-center gap-3 mb-6">
-					<Brain className="h-6 w-6 text-blue-500" />
+					<Brain className="h-6 w-6 text-[#FF7308]" />
 					<h3 className="text-xl font-semibold text-gray-900 dark:text-white">
 						What type of work do you primarily do?
 					</h3>
@@ -155,8 +155,8 @@ export const WorkPreferencesStep = ({
 							}
 							className={`p-6 rounded-2xl border-2 text-left transition-all duration-200 ${
 								workPreferences.workType === type.value
-									? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-lg transform scale-[1.02]"
-									: "border-gray-200 dark:border-gray-600 hover:border-blue-300 dark:hover:border-blue-500 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+									? "border-[#C13729] bg-[#FF7308]/10 dark:bg-[#C13729]/20 shadow-lg transform scale-[1.02]"
+									: "border-gray-200 dark:border-gray-600 hover:border-[#FF7308] dark:hover:border-[#FF7308] hover:bg-gray-50 dark:hover:bg-gray-700/50"
 							}`}
 						>
 							<div className="flex items-start gap-4">
@@ -166,7 +166,7 @@ export const WorkPreferencesStep = ({
 										className={`font-semibold text-lg mb-1 ${
 											workPreferences.workType ===
 											type.value
-												? "text-blue-700 dark:text-blue-300"
+												? "text-[#C13729] dark:text-[#FF7308]"
 												: "text-gray-900 dark:text-white"
 										}`}
 									>
@@ -185,7 +185,7 @@ export const WorkPreferencesStep = ({
 			{/* Peak Hours */}
 			<div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-sm border border-gray-200 dark:border-gray-700">
 				<div className="flex items-center gap-3 mb-6">
-					<Zap className="h-6 w-6 text-yellow-500" />
+					<Zap className="h-6 w-6 text-[#E05C04]" />
 					<div>
 						<h3 className="text-xl font-semibold text-gray-900 dark:text-white">
 							When are you most productive?
@@ -203,8 +203,8 @@ export const WorkPreferencesStep = ({
 							onClick={() => togglePeakHour(block.value)}
 							className={`w-full p-6 rounded-2xl border-2 text-left transition-all duration-200 ${
 								workPreferences.peakHours.includes(block.value)
-									? "border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20 shadow-lg"
-									: "border-gray-200 dark:border-gray-600 hover:border-yellow-300 dark:hover:border-yellow-500 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+									? "border-[#E05C04] bg-[#FF7308]/10 dark:bg-[#E05C04]/20 shadow-lg"
+									: "border-gray-200 dark:border-gray-600 hover:border-[#FF7308] dark:hover:border-[#FF7308] hover:bg-gray-50 dark:hover:bg-gray-700/50"
 							}`}
 						>
 							<div className="flex items-center gap-4">
@@ -216,7 +216,7 @@ export const WorkPreferencesStep = ({
 												workPreferences.peakHours.includes(
 													block.value
 												)
-													? "text-yellow-700 dark:text-yellow-300"
+													? "text-[#E05C04] dark:text-[#FF7308]"
 													: "text-gray-900 dark:text-white"
 											}`}
 										>
@@ -239,7 +239,7 @@ export const WorkPreferencesStep = ({
 			{/* Break Preferences */}
 			<div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-sm border border-gray-200 dark:border-gray-700">
 				<div className="flex items-center gap-3 mb-6">
-					<Coffee className="h-6 w-6 text-green-500" />
+					<Coffee className="h-6 w-6 text-[#A32530]" />
 					<h3 className="text-xl font-semibold text-gray-900 dark:text-white">
 						How do you prefer to take breaks?
 					</h3>
@@ -253,8 +253,8 @@ export const WorkPreferencesStep = ({
 							}
 							className={`p-6 rounded-2xl border-2 text-left transition-all duration-200 ${
 								workPreferences.breakPreference === pref.value
-									? "border-green-500 bg-green-50 dark:bg-green-900/20 shadow-lg transform scale-[1.02]"
-									: "border-gray-200 dark:border-gray-600 hover:border-green-300 dark:hover:border-green-500 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+									? "border-[#A32530] bg-[#A32530]/10 dark:bg-[#A32530]/20 shadow-lg transform scale-[1.02]"
+									: "border-gray-200 dark:border-gray-600 hover:border-[#A32530] dark:hover:border-[#A32530] hover:bg-gray-50 dark:hover:bg-gray-700/50"
 							}`}
 						>
 							<div className="flex items-start gap-4">
@@ -264,7 +264,7 @@ export const WorkPreferencesStep = ({
 										className={`font-semibold mb-1 ${
 											workPreferences.breakPreference ===
 											pref.value
-												? "text-green-700 dark:text-green-300"
+												? "text-[#A32530] dark:text-[#C13729]"
 												: "text-gray-900 dark:text-white"
 										}`}
 									>
@@ -273,7 +273,7 @@ export const WorkPreferencesStep = ({
 									<div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
 										{pref.description}
 									</div>
-									<div className="text-xs text-green-600 dark:text-green-400">
+									<div className="text-xs text-[#C13729] dark:text-[#FF7308]">
 										{pref.benefit}
 									</div>
 								</div>
@@ -286,7 +286,7 @@ export const WorkPreferencesStep = ({
 			{/* Focus Blocks */}
 			<div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-sm border border-gray-200 dark:border-gray-700">
 				<div className="flex items-center gap-3 mb-6">
-					<Clock className="h-6 w-6 text-purple-500" />
+					<Clock className="h-6 w-6 text-[#841436]" />
 					<div>
 						<h3 className="text-xl font-semibold text-gray-900 dark:text-white">
 							Deep focus blocks per day
@@ -305,14 +305,14 @@ export const WorkPreferencesStep = ({
 							}
 							className={`p-6 rounded-2xl border-2 text-center transition-all duration-200 ${
 								workPreferences.focusBlocks === num
-									? "border-purple-500 bg-purple-50 dark:bg-purple-900/20 shadow-lg transform scale-[1.05]"
-									: "border-gray-200 dark:border-gray-600 hover:border-purple-300 dark:hover:border-purple-500 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+									? "border-[#841436] bg-[#841436]/10 dark:bg-[#841436]/20 shadow-lg transform scale-[1.05]"
+									: "border-gray-200 dark:border-gray-600 hover:border-[#841436] dark:hover:border-[#841436] hover:bg-gray-50 dark:hover:bg-gray-700/50"
 							}`}
 						>
 							<div
 								className={`text-3xl font-bold mb-2 ${
 									workPreferences.focusBlocks === num
-										? "text-purple-600 dark:text-purple-400"
+										? "text-[#841436] dark:text-[#C13729]"
 										: "text-gray-900 dark:text-white"
 								}`}
 							>
@@ -328,8 +328,8 @@ export const WorkPreferencesStep = ({
 
 			{/* Summary */}
 			{workPreferences.peakHours.length > 0 && (
-				<div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border border-blue-200 dark:border-blue-800 rounded-3xl p-8">
-					<h4 className="text-xl font-semibold text-blue-800 dark:text-blue-200 mb-4 flex items-center gap-2">
+				<div className="bg-gradient-to-r from-[#FF7308]/10 to-[#841436]/10 dark:from-[#FF7308]/20 dark:to-[#841436]/20 border border-[#FF7308]/30 dark:border-[#841436]/30 rounded-3xl p-8">
+					<h4 className="text-xl font-semibold text-[#841436] dark:text-[#FF7308] mb-4 flex items-center gap-2">
 						<Zap className="h-5 w-5" />
 						Your Peak Hours ({workPreferences.peakHours.length}{" "}
 						selected)
@@ -346,10 +346,10 @@ export const WorkPreferencesStep = ({
 								>
 									<div className="text-xl">{block?.icon}</div>
 									<div>
-										<div className="font-medium text-blue-800 dark:text-blue-200">
+										<div className="font-medium text-[#841436] dark:text-[#FF7308]">
 											{block?.label}
 										</div>
-										<div className="text-sm text-blue-600 dark:text-blue-400">
+										<div className="text-sm text-[#C13729] dark:text-[#E05C04]">
 											{block?.time}
 										</div>
 									</div>

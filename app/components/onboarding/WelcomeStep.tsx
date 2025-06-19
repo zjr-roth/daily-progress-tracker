@@ -10,10 +10,10 @@ export const WelcomeStep = ({ onNext }: { onNext: () => void }) => {
 			<div className="text-center space-y-8 max-w-2xl mx-auto px-6">
 				{/* Logo with enhanced styling */}
 				<div className="relative">
-					<div className="w-24 h-24 mx-auto bg-gradient-to-br from-purple-600 via-blue-600 to-purple-700 rounded-3xl flex items-center justify-center shadow-xl transform rotate-3 hover:rotate-0 transition-transform duration-300">
+					<div className="w-24 h-24 mx-auto bg-gradient-to-br from-[#FF7308] via-[#C13729] to-[#841436] rounded-3xl flex items-center justify-center shadow-xl transform rotate-3 hover:rotate-0 transition-transform duration-300">
 						<Sparkles className="h-12 w-12 text-white" />
 					</div>
-					<div className="absolute inset-0 w-24 h-24 mx-auto bg-gradient-to-br from-purple-600 via-blue-600 to-purple-700 rounded-3xl opacity-20 blur-xl"></div>
+					<div className="absolute inset-0 w-24 h-24 mx-auto bg-gradient-to-br from-[#FF7308] via-[#C13729] to-[#841436] rounded-3xl opacity-20 blur-xl"></div>
 				</div>
 
 				{/* Welcome text with better typography */}
@@ -41,7 +41,7 @@ export const WelcomeStep = ({ onNext }: { onNext: () => void }) => {
 							value={userName}
 							onChange={(e) => setUserName(e.target.value)}
 							placeholder="Enter your name"
-							className="w-full px-6 py-4 text-lg border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:outline-none focus:ring-4 focus:ring-purple-500/20 focus:border-purple-500 dark:bg-gray-800 dark:text-white transition-all duration-200"
+							className="w-full px-6 py-4 text-lg border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#FF7308]/20 focus:border-[#FF7308] dark:bg-gray-800 dark:text-white transition-all duration-200"
 						/>
 					</div>
 				</div>
@@ -63,7 +63,7 @@ export const WelcomeStep = ({ onNext }: { onNext: () => void }) => {
 								key={index}
 								className="flex items-start gap-3 text-gray-600 dark:text-gray-300"
 							>
-								<div className="w-6 h-6 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center flex-shrink-0 mt-0.5">
+								<div className="w-6 h-6 rounded-full bg-gradient-to-r from-[#FF7308] to-[#C13729] flex items-center justify-center flex-shrink-0 mt-0.5">
 									<span className="text-white text-sm font-bold">
 										{index + 1}
 									</span>
@@ -78,18 +78,18 @@ export const WelcomeStep = ({ onNext }: { onNext: () => void }) => {
 				<button
 					onClick={onNext}
 					disabled={!userName.trim()}
-					className="group relative px-8 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white text-lg font-semibold rounded-2xl hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1 disabled:transform-none"
+					className="group relative px-8 py-4 bg-gradient-to-r from-[#FF7308] to-[#C13729] text-white text-lg font-semibold rounded-2xl hover:from-[#E05C04] hover:to-[#A32530] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1 disabled:transform-none"
 				>
 					<div className="flex items-center gap-3">
 						Let's get started!
 						<ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform duration-200" />
 					</div>
-					<div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl opacity-50 blur-xl group-hover:opacity-75 transition-opacity duration-300 -z-10"></div>
+					<div className="absolute inset-0 bg-gradient-to-r from-[#FF7308] to-[#C13729] rounded-2xl opacity-50 blur-xl group-hover:opacity-75 transition-opacity duration-300 -z-10"></div>
 				</button>
 
 				{/* Progress indicator */}
 				<div className="flex items-center justify-center gap-2 mt-8">
-					<div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+					<div className="w-2 h-2 bg-[#FF7308] rounded-full"></div>
 					<div className="w-2 h-2 bg-gray-300 dark:bg-gray-600 rounded-full"></div>
 					<div className="w-2 h-2 bg-gray-300 dark:bg-gray-600 rounded-full"></div>
 					<div className="w-2 h-2 bg-gray-300 dark:bg-gray-600 rounded-full"></div>

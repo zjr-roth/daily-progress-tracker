@@ -142,7 +142,7 @@ export const CommitmentsStep = ({
 		<div className="space-y-8 max-w-4xl mx-auto">
 			{/* Header */}
 			<div className="text-center space-y-4">
-				<div className="w-16 h-16 mx-auto bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
+				<div className="w-16 h-16 mx-auto bg-gradient-to-br from-[#FF7308] to-[#C13729] rounded-2xl flex items-center justify-center shadow-lg">
 					<Calendar className="h-8 w-8 text-white" />
 				</div>
 				<div>
@@ -159,7 +159,7 @@ export const CommitmentsStep = ({
 			{/* Natural Language Input */}
 			<div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-sm border border-gray-200 dark:border-gray-700">
 				<div className="flex items-start gap-4 mb-6">
-					<div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
+					<div className="w-10 h-10 bg-gradient-to-r from-[#FF7308] to-[#C13729] rounded-full flex items-center justify-center flex-shrink-0">
 						<MessageCircle className="h-5 w-5 text-white" />
 					</div>
 					<div className="flex-1">
@@ -179,13 +179,13 @@ export const CommitmentsStep = ({
 						onChange={(e) => setNaturalInput(e.target.value)}
 						placeholder="e.g., I have 2 hours of Math study, 2 hours of CPA study, 1 hour of taking my dog to the dog park, 45 minutes for gym workout..."
 						rows={4}
-						className="w-full px-6 py-4 text-lg border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 dark:bg-gray-700 dark:text-white resize-none transition-all duration-200"
+						className="w-full px-6 py-4 text-lg border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#FF7308]/20 focus:border-[#FF7308] dark:bg-gray-700 dark:text-white resize-none transition-all duration-200"
 					/>
 
 					<button
 						onClick={handleProcessInput}
 						disabled={!naturalInput.trim() || isProcessing}
-						className="group relative px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-xl hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-lg hover:shadow-xl"
+						className="group relative px-6 py-3 bg-gradient-to-r from-[#FF7308] to-[#C13729] text-white font-semibold rounded-xl hover:from-[#E05C04] hover:to-[#A32530] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-lg hover:shadow-xl"
 					>
 						<div className="flex items-center gap-2">
 							{isProcessing ? (
@@ -226,7 +226,7 @@ export const CommitmentsStep = ({
 			{commitments.length > 0 && (
 				<div className="space-y-4">
 					<h3 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-						<Clock className="h-5 w-5 text-blue-500" />
+						<Clock className="h-5 w-5 text-[#C13729]" />
 						Your commitments ({commitments.length})
 					</h3>
 					<div className="grid gap-3">

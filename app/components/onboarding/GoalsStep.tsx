@@ -81,7 +81,7 @@ export const GoalsStep = ({
 		<div className="space-y-8 max-w-4xl mx-auto">
 			{/* Header */}
 			<div className="text-center space-y-4">
-				<div className="w-16 h-16 mx-auto bg-gradient-to-br from-green-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg">
+				<div className="w-16 h-16 mx-auto bg-gradient-to-br from-[#E05C04] to-[#841436] rounded-2xl flex items-center justify-center shadow-lg">
 					<Target className="h-8 w-8 text-white" />
 				</div>
 				<div>
@@ -98,7 +98,7 @@ export const GoalsStep = ({
 			{/* Natural Language Goals Input - Front and Center */}
 			<div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-sm border border-gray-200 dark:border-gray-700">
 				<div className="flex items-start gap-4 mb-6">
-					<div className="w-10 h-10 bg-gradient-to-r from-green-500 to-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+					<div className="w-10 h-10 bg-gradient-to-r from-[#E05C04] to-[#841436] rounded-full flex items-center justify-center flex-shrink-0">
 						<MessageCircle className="h-5 w-5 text-white" />
 					</div>
 					<div className="flex-1">
@@ -117,7 +117,7 @@ export const GoalsStep = ({
 					onChange={(e) => onCustomGoalsChange(e.target.value)}
 					placeholder="e.g., I want to learn Spanish, get better at cooking, read 12 books this year, start exercising regularly, spend more time with family..."
 					rows={4}
-					className="w-full px-6 py-4 text-lg border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:outline-none focus:ring-4 focus:ring-green-500/20 focus:border-green-500 dark:bg-gray-700 dark:text-white resize-none transition-all duration-200"
+					className="w-full px-6 py-4 text-lg border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:outline-none focus:ring-4 focus:ring-[#E05C04]/20 focus:border-[#E05C04] dark:bg-gray-700 dark:text-white resize-none transition-all duration-200"
 				/>
 
 				{/* Examples */}
@@ -135,7 +135,7 @@ export const GoalsStep = ({
 										: example;
 									onCustomGoalsChange(newGoals);
 								}}
-								className="px-3 py-1 text-sm bg-white dark:bg-gray-600 text-gray-600 dark:text-gray-300 hover:text-green-600 dark:hover:text-green-400 border border-gray-200 dark:border-gray-500 rounded-lg hover:border-green-300 dark:hover:border-green-500 transition-colors duration-200"
+								className="px-3 py-1 text-sm bg-white dark:bg-gray-600 text-gray-600 dark:text-gray-300 hover:text-[#C13729] dark:hover:text-[#FF7308] border border-gray-200 dark:border-gray-500 rounded-lg hover:border-[#FF7308] dark:hover:border-[#FF7308] transition-colors duration-200"
 							>
 								{example}
 							</button>
@@ -148,7 +148,7 @@ export const GoalsStep = ({
 			<div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-sm border border-gray-200 dark:border-gray-700">
 				<div className="flex items-center justify-between mb-6">
 					<div className="flex items-center gap-3">
-						<Lightbulb className="h-6 w-6 text-yellow-500" />
+						<Lightbulb className="h-6 w-6 text-[#FF7308]" />
 						<div>
 							<h3 className="text-xl font-semibold text-gray-900 dark:text-white">
 								Need inspiration?
@@ -161,7 +161,7 @@ export const GoalsStep = ({
 					</div>
 					<button
 						onClick={() => setShowPredefined(!showPredefined)}
-						className="flex items-center gap-2 px-4 py-2 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-xl transition-colors duration-200"
+						className="flex items-center gap-2 px-4 py-2 text-[#C13729] dark:text-[#FF7308] hover:bg-[#FF7308]/10 dark:hover:bg-[#FF7308]/20 rounded-xl transition-colors duration-200"
 					>
 						{showPredefined ? (
 							<>
@@ -182,7 +182,7 @@ export const GoalsStep = ({
 						{Object.entries(groupedGoals).map(
 							([category, categoryGoals]) => (
 								<div key={category} className="space-y-3">
-									<h4 className="text-lg font-medium text-gray-800 dark:text-gray-200 border-l-4 border-green-500 pl-3">
+									<h4 className="text-lg font-medium text-gray-800 dark:text-gray-200 border-l-4 border-[#FF7308] pl-3">
 										{category}
 									</h4>
 									<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -197,15 +197,15 @@ export const GoalsStep = ({
 												}
 												className={`p-4 rounded-xl border-2 text-left transition-all duration-200 ${
 													isGoalSelected(goal.name)
-														? "border-green-500 bg-green-50 dark:bg-green-900/20 shadow-md"
-														: "border-gray-200 dark:border-gray-600 hover:border-green-300 dark:hover:border-green-500 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+														? "border-[#C13729] bg-[#FF7308]/10 dark:bg-[#C13729]/20 shadow-md"
+														: "border-gray-200 dark:border-gray-600 hover:border-[#FF7308] dark:hover:border-[#FF7308] hover:bg-gray-50 dark:hover:bg-gray-700/50"
 												}`}
 											>
 												<div className="flex items-center gap-3">
 													{isGoalSelected(
 														goal.name
 													) ? (
-														<CheckCircle className="h-5 w-5 text-green-500" />
+														<CheckCircle className="h-5 w-5 text-[#C13729]" />
 													) : (
 														<div className="h-5 w-5 rounded-full border-2 border-gray-300 dark:border-gray-500" />
 													)}
@@ -215,7 +215,7 @@ export const GoalsStep = ({
 																isGoalSelected(
 																	goal.name
 																)
-																	? "text-green-700 dark:text-green-300"
+																	? "text-[#C13729] dark:text-[#FF7308]"
 																	: "text-gray-900 dark:text-white"
 															}`}
 														>
@@ -235,8 +235,8 @@ export const GoalsStep = ({
 
 			{/* Selected Goals Summary */}
 			{goals.length > 0 && (
-				<div className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 border border-green-200 dark:border-green-800 rounded-2xl p-6">
-					<h4 className="text-lg font-semibold text-green-800 dark:text-green-200 mb-4 flex items-center gap-2">
+				<div className="bg-gradient-to-r from-[#FF7308]/10 to-[#C13729]/10 dark:from-[#FF7308]/20 dark:to-[#C13729]/20 border border-[#FF7308]/30 dark:border-[#C13729]/30 rounded-2xl p-6">
+					<h4 className="text-lg font-semibold text-[#C13729] dark:text-[#FF7308] mb-4 flex items-center gap-2">
 						<Target className="h-5 w-5" />
 						Selected Goals ({goals.length})
 					</h4>
@@ -244,7 +244,7 @@ export const GoalsStep = ({
 						{goals.map((goal) => (
 							<span
 								key={goal.id}
-								className="inline-flex items-center gap-2 px-3 py-1 bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-200 text-sm rounded-full"
+								className="inline-flex items-center gap-2 px-3 py-1 bg-[#FF7308]/10 dark:bg-[#C13729]/20 text-[#C13729] dark:text-[#FF7308] text-sm rounded-full"
 							>
 								{goal.name}
 								<button
@@ -255,7 +255,7 @@ export const GoalsStep = ({
 											)
 										)
 									}
-									className="hover:bg-green-200 dark:hover:bg-green-700 rounded-full p-0.5 transition-colors duration-200"
+									className="hover:bg-[#C13729]/20 dark:hover:bg-[#FF7308]/20 rounded-full p-0.5 transition-colors duration-200"
 								>
 									<X className="h-3 w-3" />
 								</button>
