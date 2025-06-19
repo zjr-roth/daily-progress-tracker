@@ -22,6 +22,7 @@ interface OnboardingState {
 interface AuthContextType {
 	user: User | null;
 	loading: boolean;
+	emailVerificationSent: boolean;
 	errors: FormErrors;
 	onboardingState: OnboardingState;
 	clearErrors: () => void;
@@ -44,6 +45,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
 	const [user, setUser] = useState<User | null>(null);
 	const [loading, setLoading] = useState(true);
+	const [emailVerificationSent, setEmailVerificationSent] =
+		useState<boolean>(false);
 	const [errors, setErrors] = useState<FormErrors>({});
 	const [onboardingState, setOnboardingState] = useState<OnboardingState>({
 		hasCompletedOnboarding: false,
@@ -382,6 +385,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			await AuthService.signUp({ email, password, fullName });
 			console.log("signUp: Success");
 			setLoading(false);
+			setEmailVerificationSent(true);
 		} catch (error: any) {
 			console.error("signUp: Error:", error);
 			setLoading(false);
@@ -446,6 +450,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 	const value = {
 		user,
 		loading,
+		emailVerificationSent,
 		errors,
 		onboardingState,
 		clearErrors,

@@ -12,13 +12,11 @@ import { Button } from "@/app/components/ui/button";
 
 interface EmailVerificationAlertProps {
 	email: string;
-	onBackToSignIn: () => void;
 	onResendEmail?: () => Promise<void>;
 }
 
 export function EmailVerificationAlert({
 	email,
-	onBackToSignIn,
 	onResendEmail,
 }: EmailVerificationAlertProps) {
 	const [isResending, setIsResending] = useState(false);
@@ -186,11 +184,7 @@ export function EmailVerificationAlert({
 					)}
 
 					<div className="pt-2 border-t border-gray-200 dark:border-gray-700">
-						<Button
-							variant="ghost"
-							onClick={onBackToSignIn}
-							className="w-full text-sm"
-						>
+						<Button variant="ghost" className="w-full text-sm">
 							Already verified? Sign in here
 						</Button>
 					</div>

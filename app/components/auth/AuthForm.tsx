@@ -25,7 +25,14 @@ export function AuthForm({
 	onToggleMode,
 	onForgotPassword,
 }: AuthFormProps) {
-	const { signIn, signUp, loading, errors, clearErrors } = useAuth();
+	const {
+		signIn,
+		signUp,
+		loading,
+		errors,
+		clearErrors,
+		emailVerificationSent,
+	} = useAuth();
 	const [formData, setFormData] = useState({
 		email: "",
 		password: "",
@@ -33,7 +40,6 @@ export function AuthForm({
 		confirmPassword: "",
 	});
 	const [showPassword, setShowPassword] = useState(false);
-	const [emailVerificationSent, setEmailVerificationSent] = useState(false);
 	const [localErrors, setLocalErrors] = useState<{
 		confirmPassword?: string;
 		password?: string;
@@ -88,14 +94,6 @@ export function AuthForm({
 			// Errors are handled in the AuthContext
 			console.log("AuthForm: Error occurred, but handled in context");
 		}
-
-		// Always show email verification alert after signup attempt
-		// (regardless of success or failure)
-		if (mode === "signup") {
-			console.log("AuthForm: Setting emailVerificationSent to true");
-			console.log("AuthForm: Current formData.email:", formData.email);
-			setEmailVerificationSent(true);
-		}
 	};
 
 	const handleInputChange = (field: string, value: string) => {
@@ -131,37 +129,9 @@ export function AuthForm({
 
 	// Show email verification alert if emailVerificationSent is true
 	if (emailVerificationSent) {
-		console.log(
-			"AuthForm: Rendering EmailVerificationAlert with email:",
-			formData.email
-		);
-
-		// Fallback rendering to debug
-		if (!formData.email) {
-			console.error("AuthForm: No email found for verification alert");
-			return (
-				<div className="w-full max-w-md mx-auto p-4 bg-red-50 border border-red-200 rounded">
-					<p className="text-red-600">
-						Error: No email found for verification
-					</p>
-					<button
-						onClick={() => setEmailVerificationSent(false)}
-						className="mt-2 text-blue-600 underline"
-					>
-						Go back
-					</button>
-				</div>
-			);
-		}
-
 		return (
 			<EmailVerificationAlert
 				email={formData.email}
-				onBackToSignIn={() => {
-					console.log("AuthForm: Back to sign in clicked");
-					setEmailVerificationSent(false);
-					onToggleMode(); // This will switch back to signin mode
-				}}
 				onResendEmail={handleResendEmail}
 			/>
 		);
