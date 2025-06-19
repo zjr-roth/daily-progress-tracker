@@ -93,12 +93,26 @@ export interface MealPreferences {
 }
 
 export interface UserPreferences {
-  commitments: Commitment[];
+  commitments: Commitment[]; // Keep for backward compatibility
+  naturalLanguageCommitments?: string; // New field for natural language input
   goals: Goal[];
   customGoals: string;
-  sleepSchedule: SleepPreferences;
-  workPreferences: WorkPreferences;
-  mealTimes: MealPreferences;
+  sleepSchedule: {
+    wakeUpTime: string;
+    bedTime: string;
+    sleepDuration: number;
+  };
+  workPreferences: {
+    workType: string;
+    peakHours: string[];
+    breakPreference: string;
+    focusBlocks: number;
+  };
+  mealTimes: {
+    breakfast: string;
+    lunch: string;
+    dinner: string;
+  };
 }
 
 export interface TimeSlot {

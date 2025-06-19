@@ -88,10 +88,10 @@ export const SleepPreferencesStep = ({
 	const quality = getSleepQuality(sleepSchedule.sleepDuration);
 
 	const quickPresets = [
-		{ label: "Early Bird", bedTime: "10:00", wakeTime: "06:00" },
-		{ label: "Standard", bedTime: "21:00", wakeTime: "07:00" },
-		{ label: "Night Owl", bedTime: "12:00", wakeTime: "08:00" },
-		{ label: "Flexible", bedTime: "11:30", wakeTime: "07:30" },
+		{ label: "Early Bird", bedTime: "22:00", wakeTime: "06:00" },
+		{ label: "Standard", bedTime: "23:00", wakeTime: "07:00" },
+		{ label: "Night Owl", bedTime: "24:00", wakeTime: "08:00" },
+		{ label: "Flexible", bedTime: "23:30", wakeTime: "07:30" },
 	];
 
 	const setPreset = (preset: (typeof quickPresets)[0]) => {

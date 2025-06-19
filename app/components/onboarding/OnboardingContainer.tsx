@@ -1,4 +1,4 @@
-// app/components/onboarding/OnboardingContainer.tsx - Updated with API integration
+// app/components/onboarding/OnboardingContainer.tsx - Updated with natural language commitments
 import { UserPreferences, Schedule } from "@/app/lib/types";
 import { useCallback, useState } from "react";
 import { ProgressBar } from "./ProgressBar";
@@ -19,7 +19,8 @@ const OnboardingContainer = ({
 }: OnboardingContainerProps) => {
 	const [currentStep, setCurrentStep] = useState(0);
 	const [userData, setUserData] = useState<UserPreferences>({
-		commitments: [],
+		commitments: [], // Keep this for backward compatibility
+		naturalLanguageCommitments: "", // Add this new field
 		goals: [],
 		customGoals: "",
 		sleepSchedule: {
@@ -75,13 +76,12 @@ const OnboardingContainer = ({
 		try {
 			console.log("Sending user data to API:", userData);
 
-			// FIX #1: Send the userData object directly, not nested.
 			const response = await fetch("/api/onboarding/generate-schedule", {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
 				},
-				body: JSON.stringify(userData), // Changed from { userData }
+				body: JSON.stringify(userData),
 			});
 
 			if (!response.ok) {
@@ -94,12 +94,10 @@ const OnboardingContainer = ({
 
 			const schedule: Schedule = await response.json();
 
-			// FIX #2: Check the received data directly, not a .schedule property.
 			if (!schedule || !schedule.timeSlots) {
 				throw new Error("No schedule data received from API");
 			}
 
-			// FIX #3: Return the schedule object itself.
 			return schedule;
 		} catch (error: any) {
 			console.error("Error calling schedule generation API:", error);
@@ -153,9 +151,13 @@ const OnboardingContainer = ({
 			case 1:
 				return (
 					<CommitmentsStep
-						commitments={userData.commitments}
+						naturalLanguageCommitments={
+							userData.naturalLanguageCommitments || ""
+						}
 						onCommitmentsChange={(commitments) =>
-							updateUserData({ commitments })
+							updateUserData({
+								naturalLanguageCommitments: commitments,
+							})
 						}
 						onNext={nextStep}
 						onPrevious={prevStep}
@@ -214,9 +216,16 @@ const OnboardingContainer = ({
 						onPrevious={prevStep}
 					/>
 				) : (
-					<div className="text-center py-8">
-						<div className="text-lg text-muted-foreground">
-							Loading schedule review...
+					<div className="text-center py-16">
+						<div className="flex flex-col items-center space-y-6">
+							{/* Animated Donut Loader */}
+							<div className="relative">
+								<div className="w-16 h-16 border-4 border-muted rounded-full"></div>
+								<div className="absolute top-0 left-0 w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+							</div>
+							<div className="text-sm text-muted-foreground/70">
+								Generating your personalized schedule
+							</div>
 						</div>
 					</div>
 				);
