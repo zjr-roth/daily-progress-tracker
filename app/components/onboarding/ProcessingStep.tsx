@@ -7,6 +7,8 @@ import {
 	Target,
 	Zap,
 	AlertCircle,
+	Sparkles,
+	Bot,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
@@ -26,10 +28,18 @@ export const ProcessingStep = ({
 	const [error, setError] = useState<string | null>(null);
 
 	const processingSteps = [
-		{ text: "Analyzing your preferences...", duration: 1000 },
-		{ text: "Connecting to Atomic AI assistant...", duration: 1500 },
-		{ text: "Generating your personalized schedule...", duration: 3000 },
-		{ text: "Adding finishing touches...", duration: 1000 },
+		{ text: "Analyzing your preferences...", duration: 1000, icon: "🔍" },
+		{
+			text: "Connecting to Atomic AI assistant...",
+			duration: 1500,
+			icon: "🤖",
+		},
+		{
+			text: "Generating your personalized schedule...",
+			duration: 3000,
+			icon: "✨",
+		},
+		{ text: "Adding finishing touches...", duration: 1000, icon: "🎨" },
 	];
 
 	const generateSchedule = useCallback(async () => {
@@ -86,105 +96,155 @@ export const ProcessingStep = ({
 		generateSchedule();
 	}, [generateSchedule]);
 
+	const currentStepData = processingSteps.find(
+		(step) => step.text === currentStep
+	);
+
 	return (
-		<div className="space-y-8">
-			<div className="text-center">
+		<div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-800">
+			<div className="space-y-8 max-w-2xl mx-auto px-6 text-center">
+				{/* Main Icon with Animation */}
 				<div className="relative">
-					<Brain className="h-16 w-16 mx-auto text-primary mb-4 animate-pulse" />
+					<div className="w-24 h-24 mx-auto bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-700 rounded-3xl flex items-center justify-center shadow-2xl">
+						{progress === 100 ? (
+							<CheckCircle className="h-12 w-12 text-white" />
+						) : (
+							<Brain className="h-12 w-12 text-white animate-pulse" />
+						)}
+					</div>
+					{/* Animated glow */}
+					<div className="absolute inset-0 w-24 h-24 mx-auto bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-700 rounded-3xl opacity-20 blur-xl animate-pulse"></div>
+
+					{/* Success sparkles */}
 					{progress === 100 && (
 						<div className="absolute -top-2 -right-2">
-							<CheckCircle className="h-6 w-6 text-green-500" />
+							<Sparkles className="h-8 w-8 text-yellow-500 animate-bounce" />
 						</div>
 					)}
 				</div>
-				<h2 className="text-2xl font-bold mb-2">
-					Creating Your Personalized Schedule
-				</h2>
-				<p className="text-muted-foreground">
-					Our AI is analyzing your preferences to create the perfect
-					daily routine
-				</p>
-			</div>
 
-			<div className="max-w-md mx-auto">
-				<div className="w-full bg-secondary rounded-full h-3 mb-4">
-					<div
-						className="bg-gradient-to-r from-blue-500 to-purple-500 h-3 rounded-full transition-all duration-500 ease-out"
-						style={{ width: `${progress}%` }}
-					/>
+				{/* Header */}
+				<div className="space-y-4">
+					<h2 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
+						{progress === 100
+							? "Your Schedule is Ready!"
+							: "Creating Your Personalized Schedule"}
+					</h2>
+					<p className="text-xl text-gray-600 dark:text-gray-300">
+						{progress === 100
+							? "Our AI has crafted the perfect daily routine just for you"
+							: "Our AI is analyzing your preferences to create the perfect daily routine"}
+					</p>
 				</div>
-				<div className="text-center">
-					<div className="text-lg font-medium mb-2">
-						{Math.round(progress)}% Complete
-					</div>
-					<div className="text-sm text-muted-foreground">
-						{currentStep}
-					</div>
-				</div>
-			</div>
 
-			{error && (
-				<div className="max-w-md mx-auto bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-					<div className="flex items-start gap-3">
-						<AlertCircle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
-						<div>
-							<h3 className="font-medium text-destructive mb-1">
-								Generation Failed
-							</h3>
-							<p className="text-sm text-red-800 dark:text-red-200 mb-4">
-								{error}
-							</p>
-							<button
-								onClick={generateSchedule}
-								className="px-4 py-2 border border-border rounded-md hover:bg-secondary text-sm"
+				{/* Progress Bar */}
+				<div className="max-w-md mx-auto space-y-6">
+					<div className="relative">
+						<div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 overflow-hidden">
+							<div
+								className="bg-gradient-to-r from-purple-500 via-blue-500 to-indigo-500 h-4 rounded-full transition-all duration-1000 ease-out relative"
+								style={{ width: `${progress}%` }}
 							>
-								Retry Generation
-							</button>
+								<div className="absolute inset-0 bg-white/20 animate-pulse rounded-full"></div>
+							</div>
+						</div>
+						<div className="absolute -top-8 left-0 right-0 text-center">
+							<span className="inline-block bg-white dark:bg-gray-800 px-3 py-1 rounded-full text-sm font-medium text-gray-700 dark:text-gray-300 shadow-lg">
+								{Math.round(progress)}% Complete
+							</span>
 						</div>
 					</div>
-				</div>
-			)}
 
-			<div className="bg-secondary/30 rounded-lg p-6 space-y-4">
-				<h3 className="font-semibold">What we're considering:</h3>
-				<div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-					<div className="flex items-center gap-2">
-						<Calendar className="h-4 w-4 text-primary" />
-						<span>
-							{userData.commitments.length} fixed commitments
-						</span>
-					</div>
-					<div className="flex items-center gap-2">
-						<Target className="h-4 w-4 text-primary" />
-						<span>{userData.goals.length} personal goals</span>
-					</div>
-					<div className="flex items-center gap-2">
-						<Clock className="h-4 w-4 text-primary" />
-						<span>
-							Sleep: {userData.sleepSchedule.wakeUpTime} -{" "}
-							{userData.sleepSchedule.bedTime}
-						</span>
-					</div>
-					<div className="flex items-center gap-2">
-						<Zap className="h-4 w-4 text-primary" />
-						<span>
-							{userData.workPreferences.peakHours.length} peak
-							hours
+					{/* Current Step */}
+					<div className="flex items-center justify-center gap-3 p-4 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-200 dark:border-gray-700">
+						{currentStepData && (
+							<span className="text-2xl animate-bounce">
+								{currentStepData.icon}
+							</span>
+						)}
+						<span className="text-lg font-medium text-gray-700 dark:text-gray-300">
+							{currentStep}
 						</span>
 					</div>
 				</div>
-			</div>
 
-			{progress < 100 && !error && (
-				<div className="text-center">
+				{/* Error State */}
+				{error && (
+					<div className="max-w-md mx-auto bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-6">
+						<div className="flex items-start gap-4">
+							<AlertCircle className="h-6 w-6 text-red-500 flex-shrink-0 mt-1" />
+							<div className="text-left">
+								<h3 className="font-semibold text-red-800 dark:text-red-200 mb-2">
+									Generation Failed
+								</h3>
+								<p className="text-sm text-red-700 dark:text-red-300 mb-4">
+									{error}
+								</p>
+								<button
+									onClick={generateSchedule}
+									className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors duration-200"
+								>
+									Try Again
+								</button>
+							</div>
+						</div>
+					</div>
+				)}
+
+				{/* What we're considering */}
+				<div className="bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-3xl p-8">
+					<h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-6 flex items-center justify-center gap-2">
+						<Bot className="h-5 w-5 text-blue-500" />
+						What our AI is considering
+					</h3>
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+						{[
+							{
+								icon: Calendar,
+								label: `${userData.commitments.length} fixed commitments`,
+								color: "text-blue-500",
+							},
+							{
+								icon: Target,
+								label: `${userData.goals.length} personal goals`,
+								color: "text-green-500",
+							},
+							{
+								icon: Clock,
+								label: `Sleep: ${userData.sleepSchedule.wakeUpTime} - ${userData.sleepSchedule.bedTime}`,
+								color: "text-purple-500",
+							},
+							{
+								icon: Zap,
+								label: `${userData.workPreferences.peakHours.length} peak productivity hours`,
+								color: "text-yellow-500",
+							},
+						].map((item, index) => (
+							<div
+								key={index}
+								className="flex items-center gap-3 p-4 bg-white/50 dark:bg-gray-700/50 rounded-xl"
+							>
+								<item.icon
+									className={`h-5 w-5 ${item.color}`}
+								/>
+								<span className="text-gray-700 dark:text-gray-300 font-medium">
+									{item.label}
+								</span>
+							</div>
+						))}
+					</div>
+				</div>
+
+				{/* Back button for changes */}
+				{progress < 100 && !error && (
 					<button
 						onClick={onPrevious}
-						className="text-muted-foreground hover:text-foreground transition-colors"
+						className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors duration-200 flex items-center gap-2 mx-auto"
 					>
 						← Go back to make changes
 					</button>
-				</div>
-			)}
+				)}
+			</div>
 		</div>
 	);
 };

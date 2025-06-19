@@ -1,6 +1,14 @@
 import { Goal } from "@/app/lib/types";
 import { StepNavigation } from "./StepNavigation";
-import { Target, CheckCircle } from "lucide-react";
+import {
+	Target,
+	CheckCircle,
+	MessageCircle,
+	Lightbulb,
+	X,
+	Plus,
+} from "lucide-react";
+import { useState } from "react";
 
 export const GoalsStep = ({
 	goals,
@@ -17,6 +25,8 @@ export const GoalsStep = ({
 	onNext: () => void;
 	onPrevious: () => void;
 }) => {
+	const [showPredefined, setShowPredefined] = useState(false);
+
 	const predefinedGoals = [
 		{ name: "Learn a new skill", category: "Personal Development" },
 		{ name: "Exercise regularly", category: "Health & Fitness" },
@@ -51,74 +61,204 @@ export const GoalsStep = ({
 		return goals.some((g) => g.name === goalName);
 	};
 
+	const groupedGoals = predefinedGoals.reduce((acc, goal) => {
+		if (!acc[goal.category]) {
+			acc[goal.category] = [];
+		}
+		acc[goal.category].push(goal);
+		return acc;
+	}, {} as Record<string, typeof predefinedGoals>);
+
+	const exampleGoals = [
+		"Write a book about my experiences",
+		"Start a small business",
+		"Travel to Japan",
+		"Learn photography",
+		"Volunteer at local shelter",
+	];
+
 	return (
-		<div className="space-y-6">
-			<div className="text-center">
-				<Target className="h-12 w-12 mx-auto text-primary mb-4" />
-				<h2 className="text-2xl font-bold mb-2">
-					Your Goals & Aspirations
-				</h2>
-				<p className="text-muted-foreground">
-					What would you like to achieve? Select all that resonate
-					with you.
-				</p>
+		<div className="space-y-8 max-w-4xl mx-auto">
+			{/* Header */}
+			<div className="text-center space-y-4">
+				<div className="w-16 h-16 mx-auto bg-gradient-to-br from-green-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg">
+					<Target className="h-8 w-8 text-white" />
+				</div>
+				<div>
+					<h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+						Your Goals & Aspirations
+					</h2>
+					<p className="text-lg text-gray-600 dark:text-gray-300">
+						What would you like to achieve? Share your dreams and
+						ambitions.
+					</p>
+				</div>
 			</div>
 
-			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-				{predefinedGoals.map((goal, index) => (
-					<button
-						key={index}
-						onClick={() => toggleGoal(goal.name, goal.category)}
-						className={`p-4 rounded-lg border-2 text-left transition-all ${
-							isGoalSelected(goal.name)
-								? "border-primary bg-primary/5 text-primary"
-								: "border-border hover:border-primary/50 hover:bg-secondary/50"
-						}`}
-					>
-						<div className="flex items-center gap-3">
-							{isGoalSelected(goal.name) ? (
-								<CheckCircle className="h-5 w-5 text-primary" />
-							) : (
-								<div className="h-5 w-5 rounded-full border-2 border-muted-foreground" />
-							)}
-							<div>
-								<div className="font-medium">{goal.name}</div>
-								<div className="text-xs text-muted-foreground">
-									{goal.category}
-								</div>
-							</div>
-						</div>
-					</button>
-				))}
-			</div>
+			{/* Natural Language Goals Input - Front and Center */}
+			<div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-sm border border-gray-200 dark:border-gray-700">
+				<div className="flex items-start gap-4 mb-6">
+					<div className="w-10 h-10 bg-gradient-to-r from-green-500 to-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+						<MessageCircle className="h-5 w-5 text-white" />
+					</div>
+					<div className="flex-1">
+						<h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+							Tell me about your goals
+						</h3>
+						<p className="text-gray-600 dark:text-gray-400">
+							Share what you want to achieve - be as specific or
+							general as you'd like!
+						</p>
+					</div>
+				</div>
 
-			<div className="bg-secondary/30 rounded-lg p-6">
-				<h3 className="font-semibold mb-3">Custom Goals</h3>
-				<p className="text-sm text-muted-foreground mb-3">
-					Tell us about any other goals or priorities that matter to
-					you:
-				</p>
 				<textarea
 					value={customGoals}
 					onChange={(e) => onCustomGoalsChange(e.target.value)}
-					placeholder="e.g., Write a book, start a business, travel more, volunteer..."
-					rows={3}
-					className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+					placeholder="e.g., I want to learn Spanish, get better at cooking, read 12 books this year, start exercising regularly, spend more time with family..."
+					rows={4}
+					className="w-full px-6 py-4 text-lg border-2 border-gray-200 dark:border-gray-600 rounded-2xl focus:outline-none focus:ring-4 focus:ring-green-500/20 focus:border-green-500 dark:bg-gray-700 dark:text-white resize-none transition-all duration-200"
 				/>
+
+				{/* Examples */}
+				<div className="mt-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+					<p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+						💡 Example goals:
+					</p>
+					<div className="flex flex-wrap gap-2">
+						{exampleGoals.map((example, index) => (
+							<button
+								key={index}
+								onClick={() => {
+									const newGoals = customGoals
+										? `${customGoals}, ${example}`
+										: example;
+									onCustomGoalsChange(newGoals);
+								}}
+								className="px-3 py-1 text-sm bg-white dark:bg-gray-600 text-gray-600 dark:text-gray-300 hover:text-green-600 dark:hover:text-green-400 border border-gray-200 dark:border-gray-500 rounded-lg hover:border-green-300 dark:hover:border-green-500 transition-colors duration-200"
+							>
+								{example}
+							</button>
+						))}
+					</div>
+				</div>
 			</div>
 
+			{/* Predefined Goals Section */}
+			<div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-sm border border-gray-200 dark:border-gray-700">
+				<div className="flex items-center justify-between mb-6">
+					<div className="flex items-center gap-3">
+						<Lightbulb className="h-6 w-6 text-yellow-500" />
+						<div>
+							<h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+								Need inspiration?
+							</h3>
+							<p className="text-gray-600 dark:text-gray-400">
+								Browse our curated list of popular goals to get
+								started quickly
+							</p>
+						</div>
+					</div>
+					<button
+						onClick={() => setShowPredefined(!showPredefined)}
+						className="flex items-center gap-2 px-4 py-2 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-xl transition-colors duration-200"
+					>
+						{showPredefined ? (
+							<>
+								<X className="h-4 w-4" />
+								Hide goals
+							</>
+						) : (
+							<>
+								<Plus className="h-4 w-4" />
+								Browse goals
+							</>
+						)}
+					</button>
+				</div>
+
+				{showPredefined && (
+					<div className="space-y-6 animate-in slide-in-from-top-5 duration-300">
+						{Object.entries(groupedGoals).map(
+							([category, categoryGoals]) => (
+								<div key={category} className="space-y-3">
+									<h4 className="text-lg font-medium text-gray-800 dark:text-gray-200 border-l-4 border-green-500 pl-3">
+										{category}
+									</h4>
+									<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+										{categoryGoals.map((goal, index) => (
+											<button
+												key={index}
+												onClick={() =>
+													toggleGoal(
+														goal.name,
+														goal.category
+													)
+												}
+												className={`p-4 rounded-xl border-2 text-left transition-all duration-200 ${
+													isGoalSelected(goal.name)
+														? "border-green-500 bg-green-50 dark:bg-green-900/20 shadow-md"
+														: "border-gray-200 dark:border-gray-600 hover:border-green-300 dark:hover:border-green-500 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+												}`}
+											>
+												<div className="flex items-center gap-3">
+													{isGoalSelected(
+														goal.name
+													) ? (
+														<CheckCircle className="h-5 w-5 text-green-500" />
+													) : (
+														<div className="h-5 w-5 rounded-full border-2 border-gray-300 dark:border-gray-500" />
+													)}
+													<div>
+														<div
+															className={`font-medium ${
+																isGoalSelected(
+																	goal.name
+																)
+																	? "text-green-700 dark:text-green-300"
+																	: "text-gray-900 dark:text-white"
+															}`}
+														>
+															{goal.name}
+														</div>
+													</div>
+												</div>
+											</button>
+										))}
+									</div>
+								</div>
+							)
+						)}
+					</div>
+				)}
+			</div>
+
+			{/* Selected Goals Summary */}
 			{goals.length > 0 && (
-				<div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-					<h4 className="font-medium text-blue-800 dark:text-blue-200 mb-2">
-						Selected Goals ({goals.length}):
+				<div className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 border border-green-200 dark:border-green-800 rounded-2xl p-6">
+					<h4 className="text-lg font-semibold text-green-800 dark:text-green-200 mb-4 flex items-center gap-2">
+						<Target className="h-5 w-5" />
+						Selected Goals ({goals.length})
 					</h4>
 					<div className="flex flex-wrap gap-2">
 						{goals.map((goal) => (
 							<span
 								key={goal.id}
-								className="px-2 py-1 bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200 text-xs rounded-full"
+								className="inline-flex items-center gap-2 px-3 py-1 bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-200 text-sm rounded-full"
 							>
 								{goal.name}
+								<button
+									onClick={() =>
+										onGoalsChange(
+											goals.filter(
+												(g) => g.id !== goal.id
+											)
+										)
+									}
+									className="hover:bg-green-200 dark:hover:bg-green-700 rounded-full p-0.5 transition-colors duration-200"
+								>
+									<X className="h-3 w-3" />
+								</button>
 							</span>
 						))}
 					</div>
