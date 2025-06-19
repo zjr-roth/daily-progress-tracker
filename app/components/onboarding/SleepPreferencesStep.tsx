@@ -88,15 +88,43 @@ export const SleepPreferencesStep = ({
 	const quality = getSleepQuality(sleepSchedule.sleepDuration);
 
 	const quickPresets = [
-		{ label: "Early Bird", bedTime: "22:00", wakeTime: "06:00" },
-		{ label: "Standard", bedTime: "23:00", wakeTime: "07:00" },
-		{ label: "Night Owl", bedTime: "24:00", wakeTime: "08:00" },
-		{ label: "Flexible", bedTime: "23:30", wakeTime: "07:30" },
+		{
+			label: "Early Bird",
+			bedTime: "22:00",
+			wakeTime: "06:00",
+			displayBedTime: "10:00 PM",
+			displayWakeTime: "6:00 AM",
+		},
+		{
+			label: "Standard",
+			bedTime: "23:00",
+			wakeTime: "07:00",
+			displayBedTime: "11:00 PM",
+			displayWakeTime: "7:00 AM",
+		},
+		{
+			label: "Night Owl",
+			bedTime: "00:00", // Fixed: changed from "24:00" to "00:00"
+			wakeTime: "08:00",
+			displayBedTime: "12:00 AM",
+			displayWakeTime: "8:00 AM",
+		},
+		{
+			label: "Flexible",
+			bedTime: "23:30",
+			wakeTime: "07:30",
+			displayBedTime: "11:30 PM",
+			displayWakeTime: "7:30 AM",
+		},
 	];
 
 	const setPreset = (preset: (typeof quickPresets)[0]) => {
-		updateSchedule("bedTime", preset.bedTime);
-		updateSchedule("wakeUpTime", preset.wakeTime);
+		// Update both values in a single call to avoid potential race conditions
+		onSleepScheduleChange({
+			...sleepSchedule,
+			bedTime: preset.bedTime,
+			wakeUpTime: preset.wakeTime,
+		});
 	};
 
 	return (
@@ -118,27 +146,21 @@ export const SleepPreferencesStep = ({
 			</div>
 
 			{/* Quick Presets */}
-			<div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-sm border border-gray-200 dark:border-gray-700">
-				<h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-					<Clock className="h-5 w-5 text-[#841436]" />
-					Quick Setup
-				</h3>
-				<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-					{quickPresets.map((preset) => (
-						<button
-							key={preset.label}
-							onClick={() => setPreset(preset)}
-							className="p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl hover:border-[#841436] dark:hover:border-[#841436] hover:bg-[#841436]/10 dark:hover:bg-[#841436]/20 transition-all duration-200 text-center"
-						>
-							<div className="font-medium text-gray-900 dark:text-white mb-1">
-								{preset.label}
-							</div>
-							<div className="text-sm text-gray-600 dark:text-gray-400">
-								{preset.bedTime} - {preset.wakeTime}
-							</div>
-						</button>
-					))}
-				</div>
+			<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+				{quickPresets.map((preset) => (
+					<button
+						key={preset.label}
+						onClick={() => setPreset(preset)}
+						className="p-4 border-2 border-gray-200 dark:border-gray-600 rounded-xl hover:border-[#841436] dark:hover:border-[#841436] hover:bg-[#841436]/10 dark:hover:bg-[#841436]/20 transition-all duration-200 text-center"
+					>
+						<div className="font-medium text-gray-900 dark:text-white mb-1">
+							{preset.label}
+						</div>
+						<div className="text-sm text-gray-600 dark:text-gray-400">
+							{preset.displayBedTime} - {preset.displayWakeTime}
+						</div>
+					</button>
+				))}
 			</div>
 
 			{/* Time Input */}
