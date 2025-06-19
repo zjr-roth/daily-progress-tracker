@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { UserPreferences, Schedule } from "@/app/lib/types";
 
-// Updated system prompt to handle natural language commitments
+// Updated system prompt to handle adjustments and natural language commitments
 const systemPrompt = `
 You are an expert productivity assistant named "Atomic". Your role is to create a personalized, optimized daily schedule based on user preferences.
 
@@ -10,6 +10,19 @@ The user will provide their data in a JSON object. You MUST respond with ONLY a 
 IMPORTANT: The user may provide commitments in two ways:
 1. As structured "commitments" array (legacy format)
 2. As "naturalLanguageCommitments" text describing their fixed activities in their own words
+
+ADJUSTMENT HANDLING:
+If the request includes "adjustmentRequest" and "previousSchedule", this means the user wants to modify an existing schedule:
+- Apply the specific adjustment requested while maintaining all other preferences
+- Keep all fixed commitments and important activities from the previous schedule
+- Only modify what the user specifically requested to change
+- Reorganize surrounding activities as needed to accommodate the change
+- Maintain the overall structure and optimization of the original schedule
+
+Examples of adjustment handling:
+- "Change dinner from 8:45PM to 8:00PM" → Move dinner to 8:00PM, adjust activities around it
+- "Move exercise to evening" → Relocate exercise block to evening hours, fill the gap appropriately
+- "Add more break time" → Insert additional breaks while maintaining productivity
 
 If naturalLanguageCommitments is provided, parse and interpret the natural language to understand:
 - What the activity is
@@ -56,9 +69,43 @@ Analyze the user's commitments, goals, sleep schedule, and work preferences to c
 - The schedule should flow logically from the user's wake-up time to their bedtime
 `;
 
+// Extended interface to handle adjustments
+interface ScheduleGenerationRequest extends UserPreferences {
+  adjustmentRequest?: string;
+  previousSchedule?: Schedule;
+}
+
 export async function POST(req: NextRequest) {
 	try {
-		const userData: UserPreferences = await req.json();
+		const requestData: ScheduleGenerationRequest = await req.json();
+
+		// Create enhanced prompt for adjustments
+		let userPrompt = `Here are my preferences, please generate my schedule: ${JSON.stringify(requestData)}`;
+
+		if (requestData.adjustmentRequest && requestData.previousSchedule) {
+			userPrompt = `
+I have an existing schedule that I'd like to adjust. Here's the context:
+
+PREVIOUS SCHEDULE:
+${JSON.stringify(requestData.previousSchedule, null, 2)}
+
+USER PREFERENCES:
+${JSON.stringify({
+  commitments: requestData.commitments,
+  naturalLanguageCommitments: requestData.naturalLanguageCommitments,
+  goals: requestData.goals,
+  customGoals: requestData.customGoals,
+  sleepSchedule: requestData.sleepSchedule,
+  workPreferences: requestData.workPreferences,
+  mealTimes: requestData.mealTimes
+}, null, 2)}
+
+ADJUSTMENT REQUEST:
+"${requestData.adjustmentRequest}"
+
+Please generate a new schedule that applies this specific adjustment while maintaining all my other preferences and commitments. Keep the overall structure and optimization, but make the requested change and reorganize surrounding activities as needed.
+			`;
+		}
 
 		const response = await fetch("https://api.perplexity.ai/chat/completions", {
 			method: "POST",
@@ -72,13 +119,11 @@ export async function POST(req: NextRequest) {
 					{ role: "system", content: systemPrompt },
 					{
 						role: "user",
-						content: `Here are my preferences, please generate my schedule: ${JSON.stringify(
-							userData
-						)}`,
+						content: userPrompt,
 					},
 				],
 				max_tokens: 4096,
-				temperature: 0.7,
+				temperature: requestData.adjustmentRequest ? 0.3 : 0.7, // Lower temperature for adjustments to be more precise
 			}),
 		});
 

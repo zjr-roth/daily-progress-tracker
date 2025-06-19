@@ -132,3 +132,8 @@ export interface Schedule {
   optimizationReasoning: string;
   confidence: number;
 }
+
+export interface ScheduleGenerationRequest extends UserPreferences {
+  adjustmentRequest?: string;
+  previousSchedule?: Schedule;
+}

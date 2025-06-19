@@ -1,6 +1,13 @@
 import { Schedule } from "@/app/lib/types";
 import { StepNavigation } from "./StepNavigation";
-import { Star, CheckCircle, ArrowLeft, Check } from "lucide-react";
+import {
+	Star,
+	CheckCircle,
+	ArrowLeft,
+	Check,
+	RefreshCw,
+	Wand2,
+} from "lucide-react";
 import { useState } from "react";
 
 export const ScheduleReviewStep = ({
@@ -11,10 +18,11 @@ export const ScheduleReviewStep = ({
 }: {
 	schedule: Schedule;
 	onAccept: () => void;
-	onRegenerate: () => void;
+	onRegenerate: (adjustments?: string) => void; // Updated to accept optional adjustments
 	onPrevious: () => void;
 }) => {
 	const [feedback, setFeedback] = useState("");
+	const [isRegenerating, setIsRegenerating] = useState(false);
 
 	const formatTime = (time: string) => {
 		const [hours, minutes] = time.split(":");
@@ -26,13 +34,39 @@ export const ScheduleReviewStep = ({
 
 	const getCategoryColor = (category: string) => {
 		const colors: Record<string, string> = {
-			Work: "bg-blue-100 text-blue-800 border-blue-200",
-			Commitment: "bg-red-100 text-red-800 border-red-200",
-			Goals: "bg-green-100 text-green-800 border-green-200",
-			"Personal Care": "bg-purple-100 text-purple-800 border-purple-200",
-			Meals: "bg-orange-100 text-orange-800 border-orange-200",
+			Work: "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700",
+			Commitment:
+				"bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700",
+			Goals: "bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700",
+			"Personal Care":
+				"bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-700",
+			Meals: "bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-700",
 		};
-		return colors[category] || "bg-gray-100 text-gray-800 border-gray-200";
+		return (
+			colors[category] ||
+			"bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600"
+		);
+	};
+
+	const handleRegenerate = async () => {
+		setIsRegenerating(true);
+		try {
+			await onRegenerate(); // No adjustments - complete regeneration
+		} finally {
+			setIsRegenerating(false);
+		}
+	};
+
+	const handleApplyAdjustments = async () => {
+		if (!feedback.trim()) return;
+
+		setIsRegenerating(true);
+		try {
+			await onRegenerate(feedback.trim()); // Pass adjustments to regenerate function
+			setFeedback(""); // Clear feedback after applying
+		} finally {
+			setIsRegenerating(false);
+		}
 	};
 
 	return (
@@ -70,7 +104,7 @@ export const ScheduleReviewStep = ({
 					{schedule.timeSlots.map((slot) => (
 						<div
 							key={slot.id}
-							className="flex items-center gap-4 p-3 border border-border rounded-lg"
+							className="flex items-center gap-4 p-3 border border-border rounded-lg hover:bg-secondary/50 transition-colors"
 						>
 							<div className="text-sm font-mono w-20 text-muted-foreground">
 								{formatTime(slot.time)}
@@ -88,7 +122,7 @@ export const ScheduleReviewStep = ({
 										{slot.category}
 									</span>
 									{slot.isCommitment && (
-										<span className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-full">
+										<span className="px-2 py-1 text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded-full">
 											Fixed
 										</span>
 									)}
@@ -114,21 +148,42 @@ export const ScheduleReviewStep = ({
 
 			{/* Feedback section */}
 			<div className="bg-secondary/30 rounded-lg p-4">
-				<h4 className="font-medium mb-3">Want to make adjustments?</h4>
+				<h4 className="font-medium mb-3 flex items-center gap-2">
+					<Wand2 className="h-4 w-4" />
+					Request Adjustments
+				</h4>
 				<textarea
 					value={feedback}
 					onChange={(e) => setFeedback(e.target.value)}
-					placeholder="Tell us what you'd like to change... (e.g., 'Move exercise to evening', 'Add more break time', 'Swap morning and afternoon focus blocks')"
+					placeholder="Tell us what you'd like to change... (e.g., 'Change dinner from 8:45PM to 8:00PM', 'Move exercise to evening', 'Add more break time')"
 					rows={3}
 					className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+					disabled={isRegenerating}
 				/>
+				{feedback.trim() && (
+					<button
+						onClick={handleApplyAdjustments}
+						disabled={isRegenerating}
+						className="mt-3 flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+					>
+						{isRegenerating ? (
+							<RefreshCw className="h-4 w-4 animate-spin" />
+						) : (
+							<Wand2 className="h-4 w-4" />
+						)}
+						{isRegenerating
+							? "Applying Changes..."
+							: "Apply Adjustments"}
+					</button>
+				)}
 			</div>
 
 			{/* Action buttons */}
 			<div className="flex justify-between items-center">
 				<button
 					onClick={onPrevious}
-					className="flex items-center gap-2 px-4 py-2 text-muted-foreground hover:text-foreground transition-colors"
+					disabled={isRegenerating}
+					className="flex items-center gap-2 px-4 py-2 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
 				>
 					<ArrowLeft className="h-4 w-4" />
 					Back to edit preferences
@@ -136,15 +191,22 @@ export const ScheduleReviewStep = ({
 
 				<div className="flex gap-3">
 					<button
-						onClick={onRegenerate}
-						className="px-4 py-2 border border-border rounded-md hover:bg-secondary transition-colors"
+						onClick={handleRegenerate}
+						disabled={isRegenerating}
+						className="flex items-center gap-2 px-4 py-2 border border-border rounded-md hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 					>
-						Regenerate
+						{isRegenerating ? (
+							<RefreshCw className="h-4 w-4 animate-spin" />
+						) : (
+							<RefreshCw className="h-4 w-4" />
+						)}
+						{isRegenerating ? "Regenerating..." : "Regenerate"}
 					</button>
 
 					<button
 						onClick={onAccept}
-						className="flex items-center gap-2 px-6 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-all"
+						disabled={isRegenerating}
+						className="flex items-center gap-2 px-6 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
 					>
 						<Check className="h-4 w-4" />
 						Accept Schedule

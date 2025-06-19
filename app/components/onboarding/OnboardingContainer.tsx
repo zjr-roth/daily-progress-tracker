@@ -1,4 +1,4 @@
-// app/components/onboarding/OnboardingContainer.tsx - Updated with natural language commitments
+// app/components/onboarding/OnboardingContainer.tsx - Updated with adjustment support
 import { UserPreferences, Schedule } from "@/app/lib/types";
 import { useCallback, useState } from "react";
 import { ProgressBar } from "./ProgressBar";
@@ -72,16 +72,28 @@ const OnboardingContainer = ({
 		}
 	};
 
-	const generateScheduleWithAPI = async (): Promise<Schedule> => {
+	const generateScheduleWithAPI = async (
+		adjustments?: string
+	): Promise<Schedule> => {
 		try {
 			console.log("Sending user data to API:", userData);
+
+			// Create the API payload with optional adjustments
+			const apiPayload = {
+				...userData,
+				...(adjustments &&
+					generatedSchedule && {
+						adjustmentRequest: adjustments,
+						previousSchedule: generatedSchedule,
+					}),
+			};
 
 			const response = await fetch("/api/onboarding/generate-schedule", {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
 				},
-				body: JSON.stringify(userData),
+				body: JSON.stringify(apiPayload),
 			});
 
 			if (!response.ok) {
@@ -133,10 +145,20 @@ const OnboardingContainer = ({
 		}
 	};
 
-	const handleRegenerateSchedule = () => {
-		setCurrentStep(5); // Go back to processing step
-		setGeneratedSchedule(null);
+	// Updated to handle adjustments
+	const handleRegenerateSchedule = async (adjustments?: string) => {
+		setIsGenerating(true);
 		setGenerationError(null);
+
+		try {
+			const schedule = await generateScheduleWithAPI(adjustments);
+			setGeneratedSchedule(schedule);
+			setIsGenerating(false);
+		} catch (error: any) {
+			console.error("Schedule regeneration failed:", error);
+			setGenerationError(error.message);
+			setIsGenerating(false);
+		}
 	};
 
 	const handleRetryGeneration = () => {
@@ -218,14 +240,31 @@ const OnboardingContainer = ({
 				) : (
 					<div className="text-center py-16">
 						<div className="flex flex-col items-center space-y-6">
-							{/* Animated Donut Loader */}
-							<div className="relative">
-								<div className="w-16 h-16 border-4 border-muted rounded-full"></div>
-								<div className="absolute top-0 left-0 w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-							</div>
-							<div className="text-sm text-muted-foreground/70">
-								Generating your personalized schedule
-							</div>
+							{/* Show error state if there was an error */}
+							{generationError ? (
+								<div className="text-red-600 dark:text-red-400">
+									<p className="mb-4">{generationError}</p>
+									<button
+										onClick={handleRetryGeneration}
+										className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+									>
+										Try Again
+									</button>
+								</div>
+							) : (
+								<>
+									{/* Animated Donut Loader */}
+									<div className="relative">
+										<div className="w-16 h-16 border-4 border-muted rounded-full"></div>
+										<div className="absolute top-0 left-0 w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+									</div>
+									<div className="text-sm text-muted-foreground/70">
+										{isGenerating
+											? "Applying adjustments..."
+											: "Generating your personalized schedule"}
+									</div>
+								</>
+							)}
 						</div>
 					</div>
 				);
