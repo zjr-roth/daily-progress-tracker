@@ -10,7 +10,7 @@ export interface DatabaseTask {
   time_start: string;
   time_end: string;
   category_id: string | null;
-  category_name: string | null; // Add direct category name column
+  category_name: string | null;
   duration: number;
   time_block: TimeBlock;
   position: number;
@@ -86,20 +86,19 @@ export class TaskService {
     let hours: number;
 
     if (typeof timeInput === 'string') {
-      // Handle various formats: "HH", "HH:MM", "H:MM", etc.
       const hourMatch = timeInput.match(/(\d{1,2})/);
       if (hourMatch) {
         hours = parseInt(hourMatch[1]);
       } else {
-        hours = 12; // Default to afternoon if can't parse
+        hours = 12;
       }
     } else {
-      hours = 12; // Default to afternoon
+      hours = 12;
     }
 
-    // Ensure hours is within valid range
+
     if (hours < 0 || hours > 23) {
-      hours = 12; // Default to afternoon
+      hours = 12;
     }
 
     if (hours >= 6 && hours < 12) {
@@ -273,7 +272,7 @@ export class TaskService {
             duration: duration,
             time_block: this.getTimeBlockFromTime(timeStart.split(':')[0]), // Pass just the hour
             position: index,
-            is_active: true,
+            is_active: false,
             scheduled_date: scheduledDate,
           };
 
