@@ -1,4 +1,4 @@
-// app/lib/services/onboardingService.ts
+// app/lib/services/onboardingService.ts - Fixed database column references
 import { supabase } from '../supabase';
 import { UserPreferences } from '../types';
 
@@ -41,6 +41,7 @@ export class OnboardingService {
 
       return {
         commitments: data.commitments || [],
+        naturalLanguageCommitments: data.natural_language_commitments || '',
         goals: data.goals || [],
         customGoals: data.custom_goals || '',
         sleepSchedule: data.sleep_schedule || {
@@ -78,6 +79,7 @@ export class OnboardingService {
       const updateData = {
         user_id: userId,
         commitments: preferences.commitments,
+        natural_language_commitments: preferences.naturalLanguageCommitments || '',
         goals: preferences.goals,
         custom_goals: preferences.customGoals || null,
         sleep_schedule: preferences.sleepSchedule,
@@ -103,7 +105,7 @@ export class OnboardingService {
   }
 
   /**
-   * Mark onboarding as completed
+   * Mark onboarding as completed in users_data table
    */
   static async completeOnboarding(userId: string): Promise<void> {
     try {
@@ -113,7 +115,7 @@ export class OnboardingService {
           onboarding_completed: true,
           onboarding_completed_at: new Date().toISOString(),
         })
-        .eq('id', userId);
+        .eq('id', userId); // Fixed: using 'id' instead of 'user_id'
 
       if (error) throw error;
 
@@ -132,7 +134,7 @@ export class OnboardingService {
       const { data, error } = await supabase
         .from('users_data')
         .select('onboarding_completed')
-        .eq('id', userId)
+        .eq('id', userId) // Fixed: using 'id' instead of 'user_id'
         .single();
 
       if (error) {
@@ -163,7 +165,7 @@ export class OnboardingService {
       const { data, error } = await supabase
         .from('users_data')
         .select('*')
-        .eq('user_id', userId)
+        .eq('id', userId) // Fixed: using 'id' instead of 'user_id'
         .single();
 
       if (error) {
@@ -181,6 +183,7 @@ export class OnboardingService {
 
       const preferences: UserPreferences = {
         commitments: data.commitments || [],
+        naturalLanguageCommitments: data.natural_language_commitments || '',
         goals: data.goals || [],
         customGoals: data.custom_goals || '',
         sleepSchedule: data.sleep_schedule || {
@@ -225,7 +228,7 @@ export class OnboardingService {
           onboarding_completed_at: null,
           updated_at: new Date().toISOString(),
         })
-        .eq('user_id', userId);
+        .eq('id', userId); // Fixed: using 'id' instead of 'user_id'
 
       if (error) throw error;
 
@@ -244,7 +247,7 @@ export class OnboardingService {
       const { error } = await supabase
         .from('users_data')
         .delete()
-        .eq('user_id', userId);
+        .eq('id', userId); // Fixed: using 'id' instead of 'user_id'
 
       if (error) throw error;
 
@@ -262,6 +265,7 @@ export class OnboardingService {
     userId: string,
     updates: Partial<{
       commitments: any[];
+      naturalLanguageCommitments: string;
       goals: any[];
       customGoals: string;
       sleepSchedule: any;
@@ -274,6 +278,9 @@ export class OnboardingService {
 
       if (updates.commitments !== undefined) {
         updateData.commitments = updates.commitments;
+      }
+      if (updates.naturalLanguageCommitments !== undefined) {
+        updateData.natural_language_commitments = updates.naturalLanguageCommitments;
       }
       if (updates.goals !== undefined) {
         updateData.goals = updates.goals;
@@ -319,24 +326,18 @@ export class OnboardingService {
     try {
       // This would typically be restricted to admin users
       const { data: allUsers, error: usersError } = await supabase
-        .from('user_onboarding_status')
-        .select('onboarding_status');
+        .from('users_data')
+        .select('onboarding_completed');
 
       if (usersError) throw usersError;
 
       const stats = allUsers.reduce(
         (acc, user) => {
           acc.totalUsers++;
-          switch (user.onboarding_status) {
-            case 'completed':
-              acc.completedOnboarding++;
-              break;
-            case 'in_progress':
-              acc.inProgress++;
-              break;
-            case 'not_started':
-              acc.notStarted++;
-              break;
+          if (user.onboarding_completed) {
+            acc.completedOnboarding++;
+          } else {
+            acc.notStarted++;
           }
           return acc;
         },

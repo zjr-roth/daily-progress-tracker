@@ -19,8 +19,8 @@ const OnboardingContainer = ({
 }: OnboardingContainerProps) => {
 	const [currentStep, setCurrentStep] = useState(0);
 	const [userData, setUserData] = useState<UserPreferences>({
-		commitments: [], // Keep this for backward compatibility
-		naturalLanguageCommitments: "", // Add this new field
+		commitments: [],
+		naturalLanguageCommitments: "",
 		goals: [],
 		customGoals: "",
 		sleepSchedule: {
@@ -139,6 +139,7 @@ const OnboardingContainer = ({
 		}
 	};
 
+	// Potential Changes / issue here
 	const handleAcceptSchedule = () => {
 		if (generatedSchedule) {
 			onScheduleGenerated(generatedSchedule);
