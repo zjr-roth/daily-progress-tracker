@@ -60,7 +60,7 @@ export class TaskService {
           )
         `)
         .eq('user_id', userId)
-        .eq('is_active', true);
+        .eq('is_active', false);
 
       if (date) {
         try {
