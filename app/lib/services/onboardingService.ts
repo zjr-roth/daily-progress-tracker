@@ -111,15 +111,18 @@ export class OnboardingService {
     try {
       const { error } = await supabase
         .from('users_data')
-        .update({
+        .upsert({
+          id: userId,
           onboarding_completed: true,
           onboarding_completed_at: new Date().toISOString(),
-        })
-        .eq('id', userId); // Fixed: using 'id' instead of 'user_id'
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'id'
+        });
 
       if (error) throw error;
 
-      console.log('Onboarding status marked as completed in users_data table');
+      console.log('Onboarding status marked as completed in users_data table for user:', userId);
     } catch (error) {
       console.error('Error completing onboarding:', error);
       throw error;
