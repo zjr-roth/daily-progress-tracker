@@ -27,6 +27,7 @@ import { Button } from "./components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { useAuth } from "./contexts/AuthContext";
+import { OnboardingService } from "./lib/services/onboardingService";
 import { Task, TimeBlock, Schedule } from "./lib/types";
 import {
 	formatDisplayDate,
@@ -100,6 +101,7 @@ function MainDashboard() {
 	const [showCustomization, setShowCustomization] = useState(false);
 	const [showAIAssistant, setShowAIAssistant] = useState(false);
 	const [showOnboarding, setShowOnboarding] = useState(false);
+	const [onboardingChecked, setOnboardingChecked] = useState(false);
 	const [timeConflictAlert, setTimeConflictAlert] = useState<{
 		show: boolean;
 		message: string;
@@ -114,10 +116,45 @@ function MainDashboard() {
 	// Check if user should see onboarding on first load
 	useEffect(() => {
 		// Show onboarding if user has no tasks (first time user)
-		if (!taskLoading && tasks.length === 0) {
+		if (!taskLoading && tasks.length === 0 && !onboardingChecked) {
 			setShowOnboarding(true);
+			setOnboardingChecked(true);
 		}
-	}, [tasks, taskLoading]);
+	}, [tasks, taskLoading, onboardingChecked]);
+
+	// Check onboarding status from database
+	useEffect(() => {
+		const checkOnboardingStatus = async () => {
+			if (user?.id && !taskLoading && !onboardingChecked) {
+				try {
+					const hasCompleted =
+						await OnboardingService.hasCompletedOnboarding(user.id);
+
+					console.log("Onboarding status check:", {
+						userId: user.id,
+						hasCompleted,
+						tasksLength: tasks.length,
+					});
+
+					// Show onboarding if user hasn't completed it AND has no tasks
+					if (!hasCompleted && tasks.length === 0) {
+						setShowOnboarding(true);
+					}
+
+					setOnboardingChecked(true);
+				} catch (error) {
+					console.error("Error checking onboarding status:", error);
+					// Fallback to showing onboarding if user has no tasks
+					if (tasks.length === 0) {
+						setShowOnboarding(true);
+					}
+					setOnboardingChecked(true);
+				}
+			}
+		};
+
+		checkOnboardingStatus();
+	}, [user?.id, tasks.length, taskLoading, onboardingChecked]);
 
 	if (!currentDate) {
 		return <LoadingScreen message="Loading your dashboard..." />;
@@ -131,6 +168,7 @@ function MainDashboard() {
 					try {
 						await createTasksFromSchedule(schedule.timeSlots);
 						setShowOnboarding(false);
+						setOnboardingChecked(true);
 						showToast(
 							"🎉 Welcome to Atomic! Your schedule has been created.",
 							"success"
@@ -242,6 +280,7 @@ function MainDashboard() {
 
 	const handleNewScheduleClick = () => {
 		setShowOnboarding(true);
+		setOnboardingChecked(false); // Reset so onboarding can be shown again
 	};
 
 	const handleAIAssistantClick = () => {

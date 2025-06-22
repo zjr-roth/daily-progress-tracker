@@ -9,6 +9,8 @@ import { SleepPreferencesStep } from "./SleepPreferencesStep";
 import { WorkPreferencesStep } from "./WorkPreferencesStep";
 import { ProcessingStep } from "./ProcessingStep";
 import { ScheduleReviewStep } from "./ScheduleReviewStep";
+import { useAuth } from "@/app/contexts/AuthContext";
+import { OnboardingService } from "@/app/lib/services/onboardingService";
 
 interface OnboardingContainerProps {
 	onScheduleGenerated: (schedule: Schedule) => void;
@@ -17,6 +19,7 @@ interface OnboardingContainerProps {
 const OnboardingContainer = ({
 	onScheduleGenerated,
 }: OnboardingContainerProps) => {
+	const { user } = useAuth();
 	const [currentStep, setCurrentStep] = useState(0);
 	const [userData, setUserData] = useState<UserPreferences>({
 		commitments: [],
@@ -139,9 +142,37 @@ const OnboardingContainer = ({
 		}
 	};
 
-	// Potential Changes / issue here
-	const handleAcceptSchedule = () => {
-		if (generatedSchedule) {
+	const handleAcceptSchedule = async () => {
+		if (!generatedSchedule) {
+			console.error("No generated schedule available");
+			return;
+		}
+
+		if (!user?.id) {
+			console.error("No user ID available");
+			// Still proceed with schedule generation for fallback
+			onScheduleGenerated(generatedSchedule);
+			return;
+		}
+
+		try {
+			// Save user preferences and mark onboarding as completed
+			await OnboardingService.saveUserPreferences(
+				user.id,
+				userData,
+				true // Mark as completed
+			);
+
+			// Also mark onboarding as completed in users_data table
+			await OnboardingService.completeOnboarding(user.id);
+
+			console.log("Onboarding completed successfully for user:", user.id);
+
+			// Call the parent callback to create tasks
+			onScheduleGenerated(generatedSchedule);
+		} catch (error: any) {
+			console.error("Error completing onboarding:", error);
+			// Still proceed with schedule generation even if saving fails
 			onScheduleGenerated(generatedSchedule);
 		}
 	};
