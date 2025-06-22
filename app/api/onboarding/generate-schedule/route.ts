@@ -44,7 +44,7 @@ The JSON object you return must follow this exact structure:
       "time": "HH:MM",
       "activity": "Name of the activity",
       "description": "A brief description of the activity",
-      "category": "Work | Goals | Personal Care | Meals | Commitment | Break | Travel",
+      "category": "Work | Goals | Personal Care | Meals | Commitment | Break | Travel | Other (e.g. Read, TV, Study, etc.)",
       "duration": number, // in minutes
       "isCommitment": boolean
     }
@@ -142,6 +142,7 @@ Please generate a new schedule that applies this specific adjustment while maint
 		const data = await response.json();
 
 		const content = data.choices[0]?.message?.content;
+		console.log("content:", content);
 
 		if (!content) {
 			return NextResponse.json(

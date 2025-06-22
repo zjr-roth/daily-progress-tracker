@@ -1,6 +1,7 @@
-// app/lib/services/taskService.ts - Fixed version with proper task deletion
+// app/lib/services/taskService.ts - Enhanced with proper category handling
 import { supabase } from '../supabase';
 import { Task, TimeBlock } from '../types';
+import { CategoryService } from './categoryService';
 
 export interface DatabaseTask {
   id: string;
@@ -9,6 +10,7 @@ export interface DatabaseTask {
   time_start: string;
   time_end: string;
   category_id: string | null;
+  category_name: string | null; // Add direct category name column
   duration: number;
   time_block: TimeBlock;
   position: number;
@@ -60,9 +62,7 @@ export class TaskService {
         .eq('user_id', userId)
         .eq('is_active', true);
 
-      // Filter by date if provided (only if scheduled_date column exists)
       if (date) {
-        // We'll handle this gracefully in case the column doesn't exist
         try {
           query = query.eq('scheduled_date', date);
         } catch (error) {
@@ -81,91 +81,244 @@ export class TaskService {
     }
   }
 
-    // Helper function to determine time block from a time string like "HH:MM"
-    static getTimeBlockFromTime(time: string): TimeBlock {
-      const [hours] = time.split(":").map(Number);
-      if (hours < 12) {
-        return "morning";
-      } else if (hours < 18) {
-        return "afternoon";
+  // Helper function to determine time block from a time string like "HH" or "HH:MM"
+  static getTimeBlockFromTime(timeInput: string): TimeBlock {
+    let hours: number;
+
+    if (typeof timeInput === 'string') {
+      // Handle various formats: "HH", "HH:MM", "H:MM", etc.
+      const hourMatch = timeInput.match(/(\d{1,2})/);
+      if (hourMatch) {
+        hours = parseInt(hourMatch[1]);
       } else {
-        return "evening";
+        hours = 12; // Default to afternoon if can't parse
       }
+    } else {
+      hours = 12; // Default to afternoon
     }
 
-    // Fixed version of createTasksFromSchedule in taskService.ts
-
-static async createTasksFromSchedule(
-  userId: string,
-  timeSlots: any[]
-): Promise<Task[]> {
-  try {
-    const scheduledDate = new Date().toISOString().split("T")[0];
-
-    // Delete existing tasks for the date
-    await supabase
-      .from('tasks')
-      .delete()
-      .eq('user_id', userId)
-      .eq('scheduled_date', scheduledDate);
-
-    if (!timeSlots || timeSlots.length === 0) return [];
-
-    const tasksToInsert = timeSlots.map((slot, index) => {
-      // Parse the time and ensure it's in HH:MM format
-      let timeStart: string;
-      if (slot.time.includes(':')) {
-        // Already in HH:MM format
-        timeStart = slot.time.length === 4 ? `0${slot.time}:00` : `${slot.time}:00`;
-      } else {
-        // Handle other formats if needed
-        timeStart = `${slot.time}:00`;
-      }
-
-      // Calculate end time without subtracting seconds
-      const startDate = new Date(`1970-01-01T${timeStart}`);
-      const endDate = new Date(startDate.getTime() + (slot.duration * 60 * 1000));
-
-      // Format end time properly
-      const timeEnd = endDate.toTimeString().split(' ')[0]; // This gives HH:MM:SS
-
-      console.log(`Creating task: ${slot.activity} from ${timeStart} to ${timeEnd} (${slot.duration} minutes)`);
-
-      return {
-        user_id: userId,
-        name: slot.activity,
-        time_start: timeStart,
-        time_end: timeEnd,
-        category_id: null,
-        duration: slot.duration,
-        time_block: this.getTimeBlockFromTime(slot.time),
-        position: index,
-        is_active: true,
-        scheduled_date: scheduledDate,
-      };
-    });
-
-    console.log('Tasks to insert:', tasksToInsert);
-
-    const { data, error } = await supabase
-      .from("tasks")
-      .insert(tasksToInsert)
-      .select(`*, categories (*)`);
-
-    if (error) {
-      console.error('Database error:', error);
-      throw new Error(`Failed to save new schedule: ${error.message}`);
+    // Ensure hours is within valid range
+    if (hours < 0 || hours > 23) {
+      hours = 12; // Default to afternoon
     }
 
-    return data?.map(TaskService.transformDatabaseTaskToTask) || [];
-  } catch (error) {
-    console.error("Error creating tasks from schedule:", error);
-    throw error;
+    if (hours >= 6 && hours < 12) {
+      return "morning";
+    } else if (hours >= 12 && hours < 18) {
+      return "afternoon";
+    } else {
+      return "evening";
+    }
   }
-}
 
+  // Enhanced function to create or find category
+  static async createOrFindCategory(userId: string, categoryName: string) {
+    try {
+      // First, try to find existing category
+      const existingCategories = await CategoryService.getUserCategories(userId);
+      const existingCategory = existingCategories.find(
+        cat => cat.name.toLowerCase() === categoryName.toLowerCase()
+      );
 
+      if (existingCategory) {
+        return existingCategory;
+      }
 
+      // If not found, create new category with default styling
+      const defaultCategoryStyles = {
+        'Work': { color: 'bg-blue-500', bgColor: 'bg-blue-100 dark:bg-blue-900', textColor: 'text-blue-800 dark:text-blue-200' },
+        'Goals': { color: 'bg-green-500', bgColor: 'bg-green-100 dark:bg-green-900', textColor: 'text-green-800 dark:text-green-200' },
+        'Personal Care': { color: 'bg-purple-500', bgColor: 'bg-purple-100 dark:bg-purple-900', textColor: 'text-purple-800 dark:text-purple-200' },
+        'Meals': { color: 'bg-orange-500', bgColor: 'bg-orange-100 dark:bg-orange-900', textColor: 'text-orange-800 dark:text-orange-200' },
+        'Commitment': { color: 'bg-red-500', bgColor: 'bg-red-100 dark:bg-red-900', textColor: 'text-red-800 dark:text-red-200' },
+        'Break': { color: 'bg-gray-500', bgColor: 'bg-gray-100 dark:bg-gray-900', textColor: 'text-gray-800 dark:text-gray-200' },
+        'Travel': { color: 'bg-indigo-500', bgColor: 'bg-indigo-100 dark:bg-indigo-900', textColor: 'text-indigo-800 dark:text-indigo-200' },
+        'Study': { color: 'bg-cyan-500', bgColor: 'bg-cyan-100 dark:bg-cyan-900', textColor: 'text-cyan-800 dark:text-cyan-200' },
+        'Exercise': { color: 'bg-emerald-500', bgColor: 'bg-emerald-100 dark:bg-emerald-900', textColor: 'text-emerald-800 dark:text-emerald-200' },
+        'Personal': { color: 'bg-violet-500', bgColor: 'bg-violet-100 dark:bg-violet-900', textColor: 'text-violet-800 dark:text-violet-200' }
+      };
+
+      const style = defaultCategoryStyles[categoryName as keyof typeof defaultCategoryStyles] ||
+                   defaultCategoryStyles['Personal'];
+
+      const newCategory = await CategoryService.createCategory(userId, {
+        name: categoryName,
+        ...style
+      });
+
+      return newCategory;
+    } catch (error) {
+      console.error(`Error creating/finding category "${categoryName}":`, error);
+      // Return null if category creation fails
+      return null;
+    }
+  }
+
+  // Enhanced createTasksFromSchedule with proper category handling and better time parsing
+  static async createTasksFromSchedule(
+    userId: string,
+    timeSlots: any[]
+  ): Promise<Task[]> {
+    try {
+      const scheduledDate = new Date().toISOString().split("T")[0];
+
+      // Delete existing tasks for the date
+      await supabase
+        .from('tasks')
+        .delete()
+        .eq('user_id', userId)
+        .eq('scheduled_date', scheduledDate);
+
+      if (!timeSlots || timeSlots.length === 0) return [];
+
+      const createdTasks: Task[] = [];
+
+      // Process each time slot individually to handle category creation
+      for (let index = 0; index < timeSlots.length; index++) {
+        const slot = timeSlots[index];
+
+        try {
+          console.log(`Processing slot ${index + 1}:`, slot);
+
+          // Enhanced time parsing with better error handling
+          let timeStart: string;
+          let timeEnd: string;
+
+          // Parse the time more carefully
+          if (typeof slot.time === 'string' && slot.time.includes(':')) {
+            // Handle various time formats: "HH:MM", "H:MM", "HH:MM AM/PM"
+            const timeStr = slot.time.trim();
+
+            // Extract just the time part (remove AM/PM if present)
+            const timeMatch = timeStr.match(/(\d{1,2}):(\d{2})/);
+            if (timeMatch) {
+              const hours = parseInt(timeMatch[1]);
+              const minutes = parseInt(timeMatch[2]);
+
+              // Validate time values
+              if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+                throw new Error(`Invalid time values: ${hours}:${minutes}`);
+              }
+
+              timeStart = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`;
+            } else {
+              throw new Error(`Could not parse time: ${timeStr}`);
+            }
+          } else {
+            // Fallback for other formats
+            timeStart = '08:00:00'; // Default start time
+          }
+
+          // Calculate end time with proper validation
+          const duration = slot.duration || 60; // Default 1 hour if not specified
+          if (duration <= 0 || duration > 1440) { // Max 24 hours
+            throw new Error(`Invalid duration: ${duration} minutes`);
+          }
+
+          // Parse start time for calculation
+          const [startHours, startMinutes] = timeStart.split(':').map(Number);
+          const startTotalMinutes = startHours * 60 + startMinutes;
+          const endTotalMinutes = startTotalMinutes + duration;
+
+          // Handle day overflow (e.g., sleep tasks that go past midnight)
+          let endHours, endMins;
+          if (endTotalMinutes >= 1440) { // 24 hours = 1440 minutes
+            // Task goes into next day
+            endHours = Math.floor((endTotalMinutes - 1440) / 60);
+            endMins = (endTotalMinutes - 1440) % 60;
+
+            // For tasks that cross midnight, we'll cap them at 23:59:59
+            endHours = 23;
+            endMins = 59;
+            timeEnd = '23:59:59';
+
+            console.log(`Task "${slot.activity}" crosses midnight, capping at 23:59:59`);
+          } else {
+            endHours = Math.floor(endTotalMinutes / 60);
+            endMins = endTotalMinutes % 60;
+            timeEnd = `${endHours.toString().padStart(2, '0')}:${endMins.toString().padStart(2, '0')}:00`;
+          }
+
+          console.log(`Creating task: ${slot.activity} from ${timeStart} to ${timeEnd} (${duration} minutes)`);
+
+          // Validate that end time is after start time
+          const startTime = new Date(`1970-01-01T${timeStart}`);
+          const endTime = new Date(`1970-01-01T${timeEnd}`);
+
+          if (endTime <= startTime) {
+            console.warn(`Invalid time range for "${slot.activity}": ${timeStart} to ${timeEnd}. Adjusting...`);
+            // Adjust end time to be at least 30 minutes after start
+            const adjustedEndTime = new Date(startTime.getTime() + 30 * 60 * 1000);
+            timeEnd = adjustedEndTime.toTimeString().split(' ')[0];
+            console.log(`Adjusted end time to: ${timeEnd}`);
+          }
+
+          // Handle category creation/lookup
+          let categoryId: string | null = null;
+          const categoryName = slot.category || 'Personal';
+
+          const category = await this.createOrFindCategory(userId, categoryName);
+          if (category) {
+            categoryId = category.id;
+          }
+
+          // Prepare task data
+          const taskData = {
+            user_id: userId,
+            name: slot.activity,
+            time_start: timeStart,
+            time_end: timeEnd,
+            category_id: categoryId,
+            category_name: categoryName, // Store category name directly as fallback
+            duration: duration,
+            time_block: this.getTimeBlockFromTime(timeStart.split(':')[0]), // Pass just the hour
+            position: index,
+            is_active: true,
+            scheduled_date: scheduledDate,
+          };
+
+          console.log('Inserting task data:', taskData);
+
+          // Insert single task
+          const { data, error } = await supabase
+            .from("tasks")
+            .insert(taskData)
+            .select(`*, categories (*)`)
+            .single();
+
+          if (error) {
+            console.error('Database error for task:', slot.activity, error);
+
+            // Try to provide more specific error handling
+            if (error.message.includes('range lower bound')) {
+              console.error(`Time range issue: ${timeStart} to ${timeEnd}`);
+              // Skip this task and continue with others
+              continue;
+            }
+
+            throw new Error(`Failed to save task "${slot.activity}": ${error.message}`);
+          }
+
+          if (data) {
+            const transformedTask = TaskService.transformDatabaseTaskToTask(data);
+            createdTasks.push(transformedTask);
+            console.log(`Successfully created task: ${slot.activity}`);
+          }
+
+        } catch (taskError) {
+          console.error(`Error creating task "${slot.activity}":`, taskError);
+          // Continue with other tasks even if one fails
+        }
+      }
+
+      console.log(`Successfully created ${createdTasks.length} out of ${timeSlots.length} tasks`);
+      return createdTasks;
+
+    } catch (error) {
+      console.error("Error creating tasks from schedule:", error);
+      throw error;
+    }
+  }
 
   static async createTask(
     userId: string,
@@ -176,12 +329,19 @@ static async createTasksFromSchedule(
     }
   ): Promise<Task> {
     try {
+      // Handle category creation/lookup if needed
+      let categoryId = taskData.categoryId;
+      if (!categoryId && taskData.category) {
+        const category = await this.createOrFindCategory(userId, taskData.category);
+        categoryId = category?.id;
+      }
+
       // First check if time slot is available using basic validation
       const timeStart = TaskService.extractTimeFromTimeString(taskData.time);
 
       const endDate = new Date(`1970-01-01T${timeStart}`);
       endDate.setMinutes(endDate.getMinutes() + taskData.duration);
-      endDate.setSeconds(endDate.getSeconds() - 1); // Subtract 1 second for DB
+      endDate.setSeconds(endDate.getSeconds() - 1);
 
       const timeEnd = endDate.toTimeString().split(' ')[0];
 
@@ -200,19 +360,20 @@ static async createTasksFromSchedule(
         taskData.scheduledDate
       );
 
-      // Prepare insert data - only include columns that exist
+      // Prepare insert data
       const insertData: any = {
         user_id: userId,
         name: taskData.name,
         time_start: timeStart,
         time_end: timeEnd,
-        category_id: taskData.categoryId || null,
+        category_id: categoryId || null,
+        category_name: taskData.category, // Store category name as fallback
         duration: taskData.duration,
         time_block: taskData.block,
         position: position,
       };
 
-      // Only add these fields if they're provided (to avoid column errors)
+      // Only add these fields if they're provided
       if (taskData.scheduledDate) {
         insertData.scheduled_date = taskData.scheduledDate;
       }
@@ -223,27 +384,22 @@ static async createTasksFromSchedule(
       const { data, error } = await supabase
         .from('tasks')
         .insert(insertData)
-        .select(`
-          *,
-          categories (
-           *
-          )
-        `)
+        .select(`*, categories (*)`)
         .single();
 
       if (error) {
         if (error.message.includes('exclusion constraint')) {
-            throw new Error(`This time slot overlaps with an existing task.`);
+          throw new Error(`This time slot overlaps with an existing task.`);
         }
         throw new Error(`Failed to create task: ${error.message}`);
       }
 
-        return TaskService.transformDatabaseTaskToTask(data);
+      return TaskService.transformDatabaseTaskToTask(data);
 
-      } catch (error) {
-        console.error('Error in TaskService.createTask:', error);
-        throw error;
-      }
+    } catch (error) {
+      console.error('Error in TaskService.createTask:', error);
+      throw error;
+    }
   }
 
   static async updateTask(
@@ -268,7 +424,26 @@ static async createTasksFromSchedule(
         );
       }
       if (updates.block) updateData.time_block = updates.block;
-      if (updates.categoryId !== undefined) updateData.category_id = updates.categoryId;
+
+      // Handle category updates
+      if (updates.category || updates.categoryId !== undefined) {
+        if (updates.categoryId) {
+          updateData.category_id = updates.categoryId;
+        } else if (updates.category) {
+          // Find or create category
+          const { data: taskData } = await supabase
+            .from('tasks')
+            .select('user_id')
+            .eq('id', taskId)
+            .single();
+
+          if (taskData) {
+            const category = await this.createOrFindCategory(taskData.user_id, updates.category);
+            updateData.category_id = category?.id;
+          }
+        }
+        updateData.category_name = updates.category;
+      }
 
       // Only add these fields if they're provided and columns exist
       if (updates.scheduledDate) {
@@ -304,16 +479,7 @@ static async createTasksFromSchedule(
         .from('tasks')
         .update(updateData)
         .eq('id', taskId)
-        .select(`
-          *,
-          categories (
-            id,
-            name,
-            color,
-            bg_color,
-            text_color
-          )
-        `)
+        .select(`*, categories (*)`)
         .single();
 
       if (error) {
@@ -328,10 +494,9 @@ static async createTasksFromSchedule(
     }
   }
 
-  // FIXED: Actually delete tasks from database instead of just marking as inactive
+  // Rest of the methods remain the same...
   static async deleteTask(taskId: string): Promise<void> {
     try {
-      // Get the task details before deletion for cleanup
       const { data: taskToDelete, error: fetchError } = await supabase
         .from('tasks')
         .select('user_id, name')
@@ -343,15 +508,13 @@ static async createTasksFromSchedule(
         throw new Error(`Failed to fetch task for deletion: ${fetchError.message}`);
       }
 
-      // Step 1: Remove the task from any daily progress data
       if (taskToDelete) {
         await TaskService.cleanupTaskFromProgressData(taskId, taskToDelete.name);
       }
 
-      // Step 2: Actually DELETE the task from the database
       const { error } = await supabase
         .from('tasks')
-        .delete()  // Changed from update to delete
+        .delete()
         .eq('id', taskId);
 
       if (error) {
@@ -366,10 +529,142 @@ static async createTasksFromSchedule(
     }
   }
 
-  // NEW: Clean up task references from daily progress data
+  // Enhanced transform function to handle both category_id and category_name
+  static transformDatabaseTaskToTask(dbTask: DatabaseTask): Task {
+    // Use category from joined table, or fall back to category_name column
+    let categoryName = 'Personal'; // Default fallback
+
+    if (dbTask.categories?.name) {
+      categoryName = dbTask.categories.name;
+    } else if (dbTask.category_name) {
+      categoryName = dbTask.category_name;
+    }
+
+    return {
+      id: dbTask.id,
+      name: dbTask.name,
+      time: TaskService.formatTimeRange(dbTask.time_start, dbTask.time_end),
+      category: categoryName,
+      duration: dbTask.duration,
+      block: dbTask.time_block,
+    };
+  }
+
+  // All other helper methods remain the same...
+  static extractTimeFromTimeString(timeString: string): string {
+    const timeMatch = timeString.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+    if (!timeMatch) {
+      throw new Error('Invalid time format');
+    }
+
+    let [, hours, minutes, ampm] = timeMatch;
+    let hour24 = parseInt(hours);
+
+    if (ampm) {
+      if (ampm.toUpperCase() === 'PM' && hour24 !== 12) {
+        hour24 += 12;
+      } else if (ampm.toUpperCase() === 'AM' && hour24 === 12) {
+        hour24 = 0;
+      }
+    }
+
+    return `${hour24.toString().padStart(2, '0')}:${minutes}:00`;
+  }
+
+  static addMinutesToTime(timeString: string, minutes: number): string {
+    const [hours, mins] = timeString.split(':').map(Number);
+    const totalMinutes = hours * 60 + mins + minutes;
+    const newHours = Math.floor(totalMinutes / 60) % 24;
+    const newMins = totalMinutes % 60;
+    return `${newHours.toString().padStart(2, '0')}:${newMins.toString().padStart(2, '0')}:00`;
+  }
+
+  static formatTimeRange(startTime: string, endTime: string): string {
+    const formatTime = (time: string, isEndTime: boolean = false) => {
+      let [hours, minutes, seconds] = time.split(':').map(Number);
+
+      if (isEndTime && seconds === 59) {
+        const d = new Date();
+        d.setHours(hours, minutes, seconds);
+        d.setSeconds(d.getSeconds() + 1);
+        hours = d.getHours();
+        minutes = d.getMinutes();
+      }
+
+      const period = hours >= 12 ? 'PM' : 'AM';
+      const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+      return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+    };
+
+    return `${formatTime(startTime)}-${formatTime(endTime, true)}`;
+  }
+
+  // Simplified conflict check
+  static checkBasicTimeConflict(
+    existingTasks: Task[],
+    newTaskTime: string,
+    excludeTaskId?: string
+  ): boolean {
+    try {
+      const newTaskTimeRange = TaskService.parseTimeString(newTaskTime);
+
+      for (const task of existingTasks) {
+        if (excludeTaskId && task.id === excludeTaskId) continue;
+
+        const taskTimeRange = TaskService.parseTimeString(task.time);
+
+        if (
+          (newTaskTimeRange.start < taskTimeRange.end &&
+           newTaskTimeRange.end > taskTimeRange.start)
+        ) {
+          return true;
+        }
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Error checking time conflict:', error);
+      return true;
+    }
+  }
+
+  static parseTimeString(timeString: string): { start: Date; end: Date } {
+    const timePattern = /(\d{1,2}):(\d{2})\s*(AM|PM)?\s*-\s*(\d{1,2}):(\d{2})\s*(AM|PM)/i;
+    const match = timeString.match(timePattern);
+
+    if (!match) {
+      throw new Error(`Invalid time format: ${timeString}`);
+    }
+
+    const [, startHour, startMin, startPeriod, endHour, endMin, endPeriod] = match;
+
+    const start = new Date();
+    const end = new Date();
+
+    let startHour24 = parseInt(startHour);
+    let endHour24 = parseInt(endHour);
+
+    const actualStartPeriod = startPeriod || endPeriod;
+    if (actualStartPeriod?.toUpperCase() === 'PM' && startHour24 !== 12) {
+      startHour24 += 12;
+    } else if (actualStartPeriod?.toUpperCase() === 'AM' && startHour24 === 12) {
+      startHour24 = 0;
+    }
+
+    if (endPeriod?.toUpperCase() === 'PM' && endHour24 !== 12) {
+      endHour24 += 12;
+    } else if (endPeriod?.toUpperCase() === 'AM' && endHour24 === 12) {
+      endHour24 = 0;
+    }
+
+    start.setHours(startHour24, parseInt(startMin), 0, 0);
+    end.setHours(endHour24, parseInt(endMin), 0, 0);
+
+    return { start, end };
+  }
+
   static async cleanupTaskFromProgressData(taskId: string, taskName: string): Promise<void> {
     try {
-      // Get all daily data entries that might reference this task
       const { data: dailyDataEntries, error: fetchError } = await supabase
         .from('daily_data')
         .select('id, incomplete_task_ids, incomplete_tasks, completion_percentage')
@@ -377,7 +672,7 @@ static async createTasksFromSchedule(
 
       if (fetchError) {
         console.warn('Error fetching daily data for cleanup:', fetchError);
-        return; // Don't throw, just log and continue
+        return;
       }
 
       if (!dailyDataEntries || dailyDataEntries.length === 0) {
@@ -385,12 +680,10 @@ static async createTasksFromSchedule(
         return;
       }
 
-      // Update each entry to remove references to the deleted task
       for (const entry of dailyDataEntries) {
         const updates: any = {};
         let needsUpdate = false;
 
-        // Clean up incomplete_task_ids array
         if (entry.incomplete_task_ids && Array.isArray(entry.incomplete_task_ids)) {
           const cleanedTaskIds = entry.incomplete_task_ids.filter((id: string) => id !== taskId);
           if (cleanedTaskIds.length !== entry.incomplete_task_ids.length) {
@@ -399,7 +692,6 @@ static async createTasksFromSchedule(
           }
         }
 
-        // Clean up incomplete_tasks array (for backward compatibility)
         if (entry.incomplete_tasks && Array.isArray(entry.incomplete_tasks)) {
           const cleanedTasks = entry.incomplete_tasks.filter((name: string) => name !== taskName);
           if (cleanedTasks.length !== entry.incomplete_tasks.length) {
@@ -408,12 +700,7 @@ static async createTasksFromSchedule(
           }
         }
 
-        // If we removed any tasks, we might need to recalculate completion percentage
-        // Note: This is a simplified recalculation. In a real scenario, you'd want to
-        // get the current total task count for that day to calculate the proper percentage
         if (needsUpdate) {
-          // For now, we'll leave the completion percentage as is, since we don't have
-          // the total task count for that specific day readily available here
           updates.updated_at = new Date().toISOString();
 
           const { error: updateError } = await supabase
@@ -432,7 +719,6 @@ static async createTasksFromSchedule(
       console.log(`Completed cleanup for task ${taskId} (${taskName})`);
     } catch (error) {
       console.error('Error cleaning up task from progress data:', error);
-      // Don't throw here - we want task deletion to succeed even if cleanup fails
     }
   }
 
@@ -527,75 +813,6 @@ static async createTasksFromSchedule(
       console.error('Error getting basic available time slots:', error);
       return [];
     }
-  }
-
-  // Simplified conflict check
-  static checkBasicTimeConflict(
-    existingTasks: Task[],
-    newTaskTime: string,
-    excludeTaskId?: string
-  ): boolean {
-    try {
-      const newTaskTimeRange = TaskService.parseTimeString(newTaskTime);
-
-      for (const task of existingTasks) {
-        if (excludeTaskId && task.id === excludeTaskId) continue;
-
-        const taskTimeRange = TaskService.parseTimeString(task.time);
-
-        // Check for overlap
-        if (
-          (newTaskTimeRange.start < taskTimeRange.end &&
-           newTaskTimeRange.end > taskTimeRange.start)
-        ) {
-          return true; // Conflict found
-        }
-      }
-
-      return false; // No conflict
-    } catch (error) {
-      console.error('Error checking time conflict:', error);
-      return true; // Assume conflict on error for safety
-    }
-  }
-
-  // Helper to parse time string
-  static parseTimeString(timeString: string): { start: Date; end: Date } {
-    // Updated regex to handle formats like "8:00 AM-9:00 AM", "8:00-9:00 AM", "2:30 PM-3:45 PM"
-    const timePattern = /(\d{1,2}):(\d{2})\s*(AM|PM)?\s*-\s*(\d{1,2}):(\d{2})\s*(AM|PM)/i;
-    const match = timeString.match(timePattern);
-
-    if (!match) {
-      throw new Error(`Invalid time format: ${timeString}`);
-    }
-
-    const [, startHour, startMin, startPeriod, endHour, endMin, endPeriod] = match;
-
-    const start = new Date();
-    const end = new Date();
-
-    let startHour24 = parseInt(startHour);
-    let endHour24 = parseInt(endHour);
-
-    // Handle start time period (use end period if start period is missing)
-    const actualStartPeriod = startPeriod || endPeriod;
-    if (actualStartPeriod?.toUpperCase() === 'PM' && startHour24 !== 12) {
-      startHour24 += 12;
-    } else if (actualStartPeriod?.toUpperCase() === 'AM' && startHour24 === 12) {
-      startHour24 = 0;
-    }
-
-    // Handle end time period
-    if (endPeriod?.toUpperCase() === 'PM' && endHour24 !== 12) {
-      endHour24 += 12;
-    } else if (endPeriod?.toUpperCase() === 'AM' && endHour24 === 12) {
-      endHour24 = 0;
-    }
-
-    start.setHours(startHour24, parseInt(startMin), 0, 0);
-    end.setHours(endHour24, parseInt(endMin), 0, 0);
-
-    return { start, end };
   }
 
   static async checkTimeSlotAvailability(
@@ -778,66 +995,6 @@ static async createTasksFromSchedule(
     return totalMinutes;
   }
 
-  static transformDatabaseTaskToTask(dbTask: DatabaseTask): Task {
-    return {
-      id: dbTask.id,
-      name: dbTask.name,
-      time: TaskService.formatTimeRange(dbTask.time_start, dbTask.time_end),
-      category: dbTask.categories?.name || 'Personal',
-      duration: dbTask.duration,
-      block: dbTask.time_block,
-    };
-  }
-
-  static extractTimeFromTimeString(timeString: string): string {
-    const timeMatch = timeString.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
-    if (!timeMatch) {
-      throw new Error('Invalid time format');
-    }
-
-    let [, hours, minutes, ampm] = timeMatch;
-    let hour24 = parseInt(hours);
-
-    if (ampm) {
-      if (ampm.toUpperCase() === 'PM' && hour24 !== 12) {
-        hour24 += 12;
-      } else if (ampm.toUpperCase() === 'AM' && hour24 === 12) {
-        hour24 = 0;
-      }
-    }
-
-    return `${hour24.toString().padStart(2, '0')}:${minutes}:00`;
-  }
-
-  static addMinutesToTime(timeString: string, minutes: number): string {
-    const [hours, mins] = timeString.split(':').map(Number);
-    const totalMinutes = hours * 60 + mins + minutes;
-    const newHours = Math.floor(totalMinutes / 60) % 24;
-    const newMins = totalMinutes % 60;
-    return `${newHours.toString().padStart(2, '0')}:${newMins.toString().padStart(2, '0')}:00`;
-  }
-
-  static formatTimeRange(startTime: string, endTime: string): string {
-    const formatTime = (time: string, isEndTime: boolean = false) => {
-      let [hours, minutes, seconds] = time.split(':').map(Number);
-
-      // If the end time is XX:XX:59, round up for display
-      if (isEndTime && seconds === 59) {
-        const d = new Date();
-        d.setHours(hours, minutes, seconds);
-        d.setSeconds(d.getSeconds() + 1);
-        hours = d.getHours();
-        minutes = d.getMinutes();
-      }
-
-      const period = hours >= 12 ? 'PM' : 'AM';
-      const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-      return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
-    };
-
-    return `${formatTime(startTime)}-${formatTime(endTime, true)}`;
-  }
-
   static async getNextPositionForTimeBlock(
     userId: string,
     timeBlock: TimeBlock,
@@ -850,7 +1007,6 @@ static async createTasksFromSchedule(
       .eq('time_block', timeBlock)
       .eq('is_active', true);
 
-    // Only filter by scheduled_date if it's provided and column exists
     if (scheduledDate) {
       try {
         query = query.eq('scheduled_date', scheduledDate);

@@ -1,4 +1,4 @@
-// app/hooks/useTaskData.ts - Fixed version
+// app/hooks/useTaskData.ts - Updated to handle new category system
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { Task, TimeBlock } from '../lib/types';
 import { useAuth } from '../contexts/AuthContext';
@@ -51,7 +51,7 @@ export function useTaskData() {
     }
   }, [user?.id]);
 
-
+  // Updated to handle automatic category creation
   const createTasksFromSchedule = useCallback(async (timeSlots: any[]) => {
     if (!user?.id) return null;
 
@@ -59,6 +59,10 @@ export function useTaskData() {
     setError(null);
     try {
       const newTasks = await TaskService.createTasksFromSchedule(user.id, timeSlots);
+
+      // Refresh categories after schedule creation (new ones might have been created)
+      await loadCategories();
+
       // Replace existing tasks with the new schedule
       setTasks(newTasks);
       return newTasks;
@@ -69,8 +73,7 @@ export function useTaskData() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
-
+  }, [user?.id, loadCategories]);
 
   const createTask = useCallback(async (taskData: Omit<Task, 'id'>) => {
     if (!user?.id) return null;
@@ -78,7 +81,7 @@ export function useTaskData() {
     setLoading(true);
     setError(null);
     try {
-      // Find category ID by name
+      // Find category ID by name, or let TaskService create it if it doesn't exist
       const category = categories.find(cat => cat.name === taskData.category);
       const categoryId = category?.id;
 
@@ -92,6 +95,11 @@ export function useTaskData() {
         priority: 1, // Default priority
       });
 
+      // If a new category was created, refresh categories
+      if (!category && taskData.category) {
+        await loadCategories();
+      }
+
       setTasks(prevTasks => [...prevTasks, newTask]);
       return newTask;
     } catch (error: any) {
@@ -102,7 +110,7 @@ export function useTaskData() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, categories]);
+  }, [user?.id, categories, loadCategories]);
 
   const updateTask = useCallback(async (taskId: string, updates: Partial<Task>) => {
     if (!user?.id) return null;
@@ -115,12 +123,22 @@ export function useTaskData() {
       if (updates.category) {
         const category = categories.find(cat => cat.name === updates.category);
         categoryId = category?.id;
+
+        // If category doesn't exist, TaskService will create it
+        if (!category) {
+          // We'll refresh categories after the update
+        }
       }
 
       const updatedTask = await TaskService.updateTask(taskId, {
         ...updates,
         categoryId,
       });
+
+      // Refresh categories if a new one might have been created
+      if (updates.category && !categories.find(cat => cat.name === updates.category)) {
+        await loadCategories();
+      }
 
       setTasks(prevTasks =>
         prevTasks.map(task => task.id === taskId ? updatedTask : task)
@@ -134,7 +152,7 @@ export function useTaskData() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, categories]);
+  }, [user?.id, categories, loadCategories]);
 
   const deleteTask = useCallback(async (taskId: string) => {
     if (!user?.id) return;

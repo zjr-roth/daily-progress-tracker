@@ -1,4 +1,4 @@
-// app/components/TaskList.tsx - Updated for database integration
+// app/components/TaskList.tsx - Updated to pass categories to TaskItem
 "use client";
 
 import React from "react";
@@ -8,10 +8,12 @@ import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
 import { Plus, Clock } from "lucide-react";
+import { Category } from "../lib/services/categoryService";
 
 interface TaskListProps {
 	tasks: Task[];
 	timeBlock: TimeBlock;
+	categories?: Category[]; // Add categories prop
 	isTaskCompleted: (taskId: string) => boolean;
 	onTaskToggle: (taskId: string, completed: boolean) => void;
 	onTaskEdit?: (taskId: string, updatedTask: Partial<Task>) => void;
@@ -40,6 +42,7 @@ const blockTimes: Record<TimeBlock, string> = {
 export function TaskList({
 	tasks,
 	timeBlock,
+	categories = [],
 	isTaskCompleted,
 	onTaskToggle,
 	onTaskEdit,
@@ -67,6 +70,9 @@ export function TaskList({
 
 			return parseTime(aTime) - parseTime(bTime);
 		});
+
+	// Extract category names for the dropdown
+	const availableCategories = categories.map((cat) => cat.name);
 
 	return (
 		<Card className={cn("border-l-4 group h-fit", blockColors[timeBlock])}>
@@ -106,6 +112,7 @@ export function TaskList({
 								onToggle={onTaskToggle}
 								onEdit={onTaskEdit}
 								onDelete={onTaskDelete}
+								availableCategories={availableCategories}
 							/>
 						))
 					) : (

@@ -1,4 +1,4 @@
-// app/components/TaskItem.tsx - Updated for database integration
+// app/components/TaskItem.tsx - Updated with enhanced category handling
 "use client";
 
 import React, { useState } from "react";
@@ -14,6 +14,7 @@ interface TaskItemProps {
 	onToggle: (taskId: string, completed: boolean) => void;
 	onEdit?: (taskId: string, updatedTask: Partial<Task>) => void;
 	onDelete?: (taskId: string) => void;
+	availableCategories?: string[]; // Add available categories for dropdown
 }
 
 export function TaskItem({
@@ -22,6 +23,7 @@ export function TaskItem({
 	onToggle,
 	onEdit,
 	onDelete,
+	availableCategories = [],
 }: TaskItemProps) {
 	const [isEditing, setIsEditing] = useState(false);
 	const [editData, setEditData] = useState({
@@ -31,9 +33,10 @@ export function TaskItem({
 		duration: task.duration,
 	});
 
+	// Enhanced category color mapping with more categories
 	const getCategoryColor = (category: string) => {
-		// This could be enhanced to use the category colors from the database
 		const colors: Record<string, string> = {
+			// Original categories
 			Study: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
 			Research:
 				"bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
@@ -42,7 +45,30 @@ export function TaskItem({
 			"Dog Care":
 				"bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
 			Work: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+
+			// AI-generated categories
+			Goals: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+			"Personal Care":
+				"bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+			Meals: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
+			Commitment:
+				"bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+			Break: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200",
+			Travel: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200",
+			Exercise:
+				"bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
+
+			// Common additional categories
+			Health: "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200",
+			Family: "bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200",
+			Social: "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200",
+			Hobby: "bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200",
+			Finance:
+				"bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+			Shopping:
+				"bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200",
 		};
+
 		return (
 			colors[category] ||
 			"bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
@@ -146,17 +172,45 @@ export function TaskItem({
 					/>
 				</div>
 				<div className="flex items-center gap-2">
-					<Input
-						value={editData.category}
-						onChange={(e) =>
-							setEditData((prev) => ({
-								...prev,
-								category: e.target.value,
-							}))
-						}
-						placeholder="Category"
-						className="flex-1"
-					/>
+					{/* Enhanced category input with dropdown if categories available */}
+					{availableCategories.length > 0 ? (
+						<select
+							value={editData.category}
+							onChange={(e) =>
+								setEditData((prev) => ({
+									...prev,
+									category: e.target.value,
+								}))
+							}
+							className="flex-1 px-3 py-2 border border-input rounded-md bg-background text-sm"
+						>
+							{availableCategories.map((cat) => (
+								<option key={cat} value={cat}>
+									{cat}
+								</option>
+							))}
+							{/* Allow custom category */}
+							{!availableCategories.includes(
+								editData.category
+							) && (
+								<option value={editData.category}>
+									{editData.category} (Custom)
+								</option>
+							)}
+						</select>
+					) : (
+						<Input
+							value={editData.category}
+							onChange={(e) =>
+								setEditData((prev) => ({
+									...prev,
+									category: e.target.value,
+								}))
+							}
+							placeholder="Category"
+							className="flex-1"
+						/>
+					)}
 					<div className="flex gap-2">
 						<Button
 							variant="outline"
