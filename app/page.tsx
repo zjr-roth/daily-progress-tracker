@@ -64,6 +64,115 @@ const getDailyGreeting = () => {
 	return randomGreeting[index];
 };
 
+function DashboardContent() {
+	const { user, markOnboardingComplete, onboardingState, loading } =
+		useAuth();
+	const { createTasksFromSchedule } = useTaskData();
+	const [scheduleGenerating, setScheduleGenerating] = useState(false);
+
+	console.log("DashboardContent render:", {
+		userId: user?.id,
+		userEmail: user?.email,
+		loading,
+		onboardingState,
+	});
+
+	// CRITICAL: If no user at this point, something is wrong with ProtectedRoute
+	// Don't show onboarding - show an error or return null
+	if (!user) {
+		console.error(
+			"DashboardContent: No user found! This should not happen if ProtectedRoute is working correctly."
+		);
+		return (
+			<div className="min-h-screen bg-background flex items-center justify-center">
+				<div className="text-center">
+					<p className="text-destructive">
+						Authentication error. Please refresh the page.
+					</p>
+				</div>
+			</div>
+		);
+	}
+
+	const showToast = (
+		message: string,
+		type: "success" | "error" = "success"
+	) => {
+		const toast = document.createElement("div");
+		const bgColor =
+			type === "success"
+				? "bg-green-100 dark:bg-green-900 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300"
+				: "bg-red-100 dark:bg-red-900 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300";
+
+		toast.className = `fixed top-4 right-4 ${bgColor} border px-4 py-3 rounded-lg shadow-lg z-50 max-w-sm animate-in slide-in-from-right duration-300`;
+		toast.textContent = message;
+		document.body.appendChild(toast);
+
+		setTimeout(() => {
+			if (document.body.contains(toast)) {
+				toast.style.animation = "fade-out 300ms ease-in-out forwards";
+				setTimeout(() => {
+					if (document.body.contains(toast)) {
+						document.body.removeChild(toast);
+					}
+				}, 300);
+			}
+		}, 4000);
+	};
+
+	const handleScheduleGenerated = async (generatedSchedule: Schedule) => {
+		setScheduleGenerating(true);
+		try {
+			await createTasksFromSchedule(generatedSchedule.timeSlots);
+			await markOnboardingComplete();
+			showToast(
+				"🎉 Your personalized schedule has been created! Welcome to Atomic!",
+				"success"
+			);
+		} catch (error: any) {
+			console.error("Error creating schedule tasks:", error);
+			showToast(error.message || "Failed to create AI schedule", "error");
+		} finally {
+			setScheduleGenerating(false);
+		}
+	};
+
+	// Handle schedule generation loading
+	if (scheduleGenerating) {
+		console.log("DashboardContent: Generating schedule");
+		return (
+			<LoadingScreen
+				message="Creating your personalized schedule..."
+				submessage="Our AI is setting up your tasks and optimizing your daily routine"
+			/>
+		);
+	}
+
+	// Handle onboarding status checking
+	if (onboardingState.isCheckingOnboardingStatus) {
+		console.log("DashboardContent: Checking onboarding status");
+		return <LoadingScreen message="Checking your profile..." />;
+	}
+
+	// Show onboarding if not completed
+	if (!onboardingState.hasCompletedOnboarding) {
+		console.log(
+			"DashboardContent: User has not completed onboarding, showing onboarding"
+		);
+		return (
+			<OnboardingContainer
+				onScheduleGenerated={handleScheduleGenerated}
+			/>
+		);
+	}
+
+	// Show main dashboard
+	console.log(
+		"DashboardContent: User authenticated and onboarded, showing main dashboard"
+	);
+	return <MainDashboard />;
+}
+
 /**
  * This component acts as a router ONLY for authenticated users.
  * It should only render if ProtectedRoute has verified the user exists.
@@ -678,6 +787,7 @@ function MainDashboard() {
 export default function HomePage() {
 	return (
 		<ProtectedRoute>
+			<DashboardContent />
 			<MainDashboard />
 		</ProtectedRoute>
 	);
