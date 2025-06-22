@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -30,7 +30,8 @@ const passwordRequirements = [
 	},
 ];
 
-export default function ResetPasswordPage() {
+// Separate component for the reset password form that uses useSearchParams
+function ResetPasswordForm() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const [password, setPassword] = useState("");
@@ -108,41 +109,217 @@ export default function ResetPasswordPage() {
 
 	if (success) {
 		return (
-			<div className="min-h-screen bg-background flex items-center justify-center p-4">
-				<Card className="w-full max-w-md mx-auto">
-					<CardContent className="p-6 text-center">
-						<div className="text-green-600 mb-4">
-							<svg
-								className="w-16 h-16 mx-auto"
-								fill="none"
-								stroke="currentColor"
-								viewBox="0 0 24 24"
-							>
-								<path
-									strokeLinecap="round"
-									strokeLinejoin="round"
-									strokeWidth={2}
-									d="M5 13l4 4L19 7"
-								/>
-							</svg>
-						</div>
-						<h2 className="text-xl font-semibold mb-2">
-							Password Updated!
-						</h2>
-						<p className="text-muted-foreground mb-4">
-							Your password has been successfully updated. You
-							will be redirected to the dashboard.
-						</p>
-						<div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-							<Loader2 className="h-4 w-4 animate-spin" />
-							Redirecting...
-						</div>
-					</CardContent>
-				</Card>
-			</div>
+			<Card className="w-full max-w-md mx-auto">
+				<CardContent className="p-6 text-center">
+					<div className="text-green-600 mb-4">
+						<svg
+							className="w-16 h-16 mx-auto"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M5 13l4 4L19 7"
+							/>
+						</svg>
+					</div>
+					<h2 className="text-xl font-semibold mb-2">
+						Password Updated!
+					</h2>
+					<p className="text-muted-foreground mb-4">
+						Your password has been successfully updated. You will be
+						redirected to the dashboard.
+					</p>
+					<div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+						<Loader2 className="h-4 w-4 animate-spin" />
+						Redirecting...
+					</div>
+				</CardContent>
+			</Card>
 		);
 	}
 
+	return (
+		<Card>
+			<CardHeader>
+				<div className="flex items-center space-x-2 mb-2">
+					<button
+						onClick={() => router.push("/")}
+						className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+					>
+						<svg
+							className="w-4 h-4"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M15 19l-7-7 7-7"
+							/>
+						</svg>
+					</button>
+					<CardTitle className="text-2xl">Reset Password</CardTitle>
+				</div>
+				<p className="text-muted-foreground">
+					Enter your new password below
+				</p>
+			</CardHeader>
+			<CardContent>
+				<form onSubmit={handleSubmit} className="space-y-4">
+					<div className="space-y-2">
+						<Label htmlFor="password">New Password</Label>
+						<div className="relative">
+							<Input
+								id="password"
+								type={showPassword ? "text" : "password"}
+								placeholder="Enter your new password"
+								value={password}
+								onChange={(e) => setPassword(e.target.value)}
+								required
+							/>
+							<button
+								type="button"
+								className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+								onClick={() => setShowPassword(!showPassword)}
+							>
+								{showPassword ? (
+									<EyeOff size={16} />
+								) : (
+									<Eye size={16} />
+								)}
+							</button>
+						</div>
+
+						{/* Password Requirements and Strength Indicator */}
+						{password && (
+							<div className="mt-3 space-y-2">
+								<div className="flex items-center justify-between">
+									<span className="text-sm text-muted-foreground">
+										Password strength:
+									</span>
+									<span
+										className={`text-sm font-medium ${passwordStrength.color}`}
+									>
+										{passwordStrength.strength
+											.charAt(0)
+											.toUpperCase() +
+											passwordStrength.strength.slice(1)}
+									</span>
+								</div>
+
+								<div className="space-y-1">
+									{passwordRequirements.map((req, index) => {
+										const isMet = req.test(password);
+										return (
+											<div
+												key={index}
+												className="flex items-center gap-2 text-xs"
+											>
+												{isMet ? (
+													<CheckCircle className="h-3 w-3 text-green-500" />
+												) : (
+													<XCircle className="h-3 w-3 text-red-500" />
+												)}
+												<span
+													className={
+														isMet
+															? "text-green-600 dark:text-green-400"
+															: "text-red-600 dark:text-red-400"
+													}
+												>
+													{req.label}
+												</span>
+											</div>
+										);
+									})}
+								</div>
+							</div>
+						)}
+					</div>
+
+					<div className="space-y-2">
+						<Label htmlFor="confirmPassword">
+							Confirm New Password
+						</Label>
+						<div className="relative">
+							<Input
+								id="confirmPassword"
+								type={showConfirmPassword ? "text" : "password"}
+								placeholder="Confirm your new password"
+								value={confirmPassword}
+								onChange={(e) =>
+									setConfirmPassword(e.target.value)
+								}
+								required
+							/>
+							<button
+								type="button"
+								className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+								onClick={() =>
+									setShowConfirmPassword(!showConfirmPassword)
+								}
+							>
+								{showConfirmPassword ? (
+									<EyeOff size={16} />
+								) : (
+									<Eye size={16} />
+								)}
+							</button>
+						</div>
+					</div>
+
+					{error && (
+						<div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
+							{error}
+						</div>
+					)}
+
+					<Button
+						type="submit"
+						className="w-full"
+						disabled={loading || !validatePassword(password)}
+					>
+						{loading && (
+							<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+						)}
+						Update Password
+					</Button>
+
+					<div className="text-center">
+						<button
+							type="button"
+							onClick={() => router.push("/")}
+							className="text-sm text-muted-foreground hover:text-foreground"
+						>
+							Back to sign in
+						</button>
+					</div>
+				</form>
+			</CardContent>
+		</Card>
+	);
+}
+
+// Loading component for Suspense fallback
+function ResetPasswordLoading() {
+	return (
+		<Card className="w-full max-w-md mx-auto">
+			<CardContent className="p-6 text-center">
+				<Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+				<p className="text-muted-foreground">Loading...</p>
+			</CardContent>
+		</Card>
+	);
+}
+
+// Main page component
+export default function ResetPasswordPage() {
 	return (
 		<div className="min-h-screen bg-background flex items-center justify-center p-4">
 			<div className="w-full max-w-md space-y-8">
@@ -162,167 +339,10 @@ export default function ResetPasswordPage() {
 					</div>
 				</div>
 
-				<Card>
-					<CardHeader className="text-center">
-						<CardTitle className="text-2xl">
-							Reset Password
-						</CardTitle>
-						<p className="text-muted-foreground">
-							Enter your new password below
-						</p>
-					</CardHeader>
-					<CardContent>
-						<form onSubmit={handleSubmit} className="space-y-4">
-							<div className="space-y-2">
-								<Label htmlFor="password">New Password</Label>
-								<div className="relative">
-									<Input
-										id="password"
-										type={
-											showPassword ? "text" : "password"
-										}
-										placeholder="Enter your new password"
-										value={password}
-										onChange={(e) =>
-											setPassword(e.target.value)
-										}
-										required
-									/>
-									<button
-										type="button"
-										className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-										onClick={() =>
-											setShowPassword(!showPassword)
-										}
-									>
-										{showPassword ? (
-											<EyeOff size={16} />
-										) : (
-											<Eye size={16} />
-										)}
-									</button>
-								</div>
-
-								{/* Password Requirements and Strength Indicator */}
-								{password && (
-									<div className="mt-3 space-y-2">
-										<div className="flex items-center justify-between">
-											<span className="text-sm text-muted-foreground">
-												Password strength:
-											</span>
-											<span
-												className={`text-sm font-medium ${passwordStrength.color}`}
-											>
-												{passwordStrength.strength
-													.charAt(0)
-													.toUpperCase() +
-													passwordStrength.strength.slice(
-														1
-													)}
-											</span>
-										</div>
-
-										<div className="space-y-1">
-											{passwordRequirements.map(
-												(req, index) => {
-													const isMet =
-														req.test(password);
-													return (
-														<div
-															key={index}
-															className="flex items-center gap-2 text-xs"
-														>
-															{isMet ? (
-																<CheckCircle className="h-3 w-3 text-green-500" />
-															) : (
-																<XCircle className="h-3 w-3 text-red-500" />
-															)}
-															<span
-																className={
-																	isMet
-																		? "text-green-600 dark:text-green-400"
-																		: "text-red-600 dark:text-red-400"
-																}
-															>
-																{req.label}
-															</span>
-														</div>
-													);
-												}
-											)}
-										</div>
-									</div>
-								)}
-							</div>
-
-							<div className="space-y-2">
-								<Label htmlFor="confirmPassword">
-									Confirm New Password
-								</Label>
-								<div className="relative">
-									<Input
-										id="confirmPassword"
-										type={
-											showConfirmPassword
-												? "text"
-												: "password"
-										}
-										placeholder="Confirm your new password"
-										value={confirmPassword}
-										onChange={(e) =>
-											setConfirmPassword(e.target.value)
-										}
-										required
-									/>
-									<button
-										type="button"
-										className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-										onClick={() =>
-											setShowConfirmPassword(
-												!showConfirmPassword
-											)
-										}
-									>
-										{showConfirmPassword ? (
-											<EyeOff size={16} />
-										) : (
-											<Eye size={16} />
-										)}
-									</button>
-								</div>
-							</div>
-
-							{error && (
-								<div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
-									{error}
-								</div>
-							)}
-
-							<Button
-								type="submit"
-								className="w-full"
-								disabled={
-									loading || !validatePassword(password)
-								}
-							>
-								{loading && (
-									<Loader2 className="mr-2 h-4 w-4 animate-spin" />
-								)}
-								Update Password
-							</Button>
-
-							<div className="text-center">
-								<button
-									type="button"
-									onClick={() => router.push("/")}
-									className="text-sm text-muted-foreground hover:text-foreground"
-								>
-									Back to sign in
-								</button>
-							</div>
-						</form>
-					</CardContent>
-				</Card>
+				{/* Wrapped in Suspense to handle useSearchParams */}
+				<Suspense fallback={<ResetPasswordLoading />}>
+					<ResetPasswordForm />
+				</Suspense>
 			</div>
 		</div>
 	);
