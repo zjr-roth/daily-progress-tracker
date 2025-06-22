@@ -670,7 +670,7 @@ export default function HomePage() {
 	return (
 		<ProtectedRoute>
 			<DashboardContent />
-			<MainDashboard />
+			{/* <MainDashboard /> */}
 		</ProtectedRoute>
 	);
 }
