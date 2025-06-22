@@ -99,9 +99,7 @@ function MainDashboard() {
 
 	const [showCustomization, setShowCustomization] = useState(false);
 	const [showAIAssistant, setShowAIAssistant] = useState(false);
-	const [onboardingMode, setOnboardingMode] = useState<
-		"first-time" | "new-schedule"
-	>("first-time");
+	const [showOnboarding, setShowOnboarding] = useState(false);
 	const [timeConflictAlert, setTimeConflictAlert] = useState<{
 		show: boolean;
 		message: string;
@@ -113,8 +111,43 @@ function MainDashboard() {
 		}>;
 	}>({ show: false, message: "", suggestions: [] });
 
+	// Check if user should see onboarding on first load
+	useEffect(() => {
+		// Show onboarding if user has no tasks (first time user)
+		if (!taskLoading && tasks.length === 0) {
+			setShowOnboarding(true);
+		}
+	}, [tasks, taskLoading]);
+
 	if (!currentDate) {
 		return <LoadingScreen message="Loading your dashboard..." />;
+	}
+
+	// If onboarding should be shown, render only the onboarding
+	if (showOnboarding) {
+		return (
+			<OnboardingContainer
+				onScheduleGenerated={async (schedule: Schedule) => {
+					try {
+						await createTasksFromSchedule(schedule.timeSlots);
+						setShowOnboarding(false);
+						showToast(
+							"🎉 Welcome to Atomic! Your schedule has been created.",
+							"success"
+						);
+					} catch (error: any) {
+						console.error(
+							"Error creating initial schedule:",
+							error
+						);
+						showToast(
+							error.message || "Failed to create schedule",
+							"error"
+						);
+					}
+				}}
+			/>
+		);
 	}
 
 	const showToast = (
@@ -208,9 +241,7 @@ function MainDashboard() {
 	};
 
 	const handleNewScheduleClick = () => {
-		setOnboardingMode("new-schedule");
-		// This state change would need to be handled to show the OnboardingContainer again
-		// For now, this button might need a different implementation if used outside the initial onboarding
+		setShowOnboarding(true);
 	};
 
 	const handleAIAssistantClick = () => {
@@ -258,7 +289,7 @@ function MainDashboard() {
 
 	return (
 		<div className="container mx-auto px-4 py-8 max-w-7xl">
-			{/* Header section - unchanged */}
+			{/* Header section */}
 			<header className="flex justify-between items-center mb-8">
 				<div className="flex items-center">
 					<Image
@@ -302,14 +333,66 @@ function MainDashboard() {
 				</div>
 			</header>
 
-			{/* Time Conflict Alert - unchanged */}
+			{/* Time Conflict Alert */}
 			{timeConflictAlert.show && (
 				<div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-					{/* ... Time Conflict Alert JSX ... */}
+					<div className="flex items-start gap-3">
+						<AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mt-0.5" />
+						<div className="flex-1">
+							<h4 className="font-medium text-yellow-800 dark:text-yellow-200 mb-2">
+								{timeConflictAlert.message}
+							</h4>
+							{timeConflictAlert.suggestions.length > 0 && (
+								<div className="space-y-2">
+									<p className="text-sm text-yellow-700 dark:text-yellow-300">
+										Suggested alternative time slots:
+									</p>
+									<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+										{timeConflictAlert.suggestions.map(
+											(suggestion, index) => (
+												<div
+													key={index}
+													className={`p-2 rounded border text-xs ${
+														suggestion.recommended
+															? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
+															: "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+													}`}
+												>
+													<div className="font-medium">
+														{suggestion.start} -{" "}
+														{suggestion.end}
+													</div>
+													<div className="text-muted-foreground capitalize">
+														{suggestion.type}
+														{suggestion.recommended &&
+															" (Recommended)"}
+													</div>
+												</div>
+											)
+										)}
+									</div>
+								</div>
+							)}
+							<Button
+								variant="outline"
+								size="sm"
+								className="mt-3"
+								onClick={() =>
+									setTimeConflictAlert({
+										show: false,
+										message: "",
+										suggestions: [],
+									})
+								}
+							>
+								Dismiss
+							</Button>
+						</div>
+					</div>
 				</div>
 			)}
 
-			{/* Progress Card - unchanged */}
+			{/* Progress Card */}
 			<div className="flex flex-col gap-6 mb-8">
 				<Card>
 					<CardContent className="p-6">
@@ -476,7 +559,7 @@ function MainDashboard() {
 				)}
 			</div>
 
-			{/* Progress History Section - unchanged */}
+			{/* Progress History Section */}
 			{Object.keys(progressData).length > 0 && (
 				<section className="mb-8">
 					<Card>
@@ -503,7 +586,7 @@ function MainDashboard() {
 				</section>
 			)}
 
-			{/* Analysis Section - unchanged */}
+			{/* Analysis Section */}
 			{tasks.length > 0 && Object.keys(progressData).length > 0 && (
 				<section className="mb-8">
 					<h2 className="text-2xl font-semibold mb-6">
@@ -516,7 +599,7 @@ function MainDashboard() {
 				</section>
 			)}
 
-			{/* Streaks Section - unchanged */}
+			{/* Streaks Section */}
 			{Object.keys(progressData).length > 0 && (
 				<section className="mb-8">
 					<StreakStats streakData={streakData} />
