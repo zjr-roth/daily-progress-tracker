@@ -387,7 +387,7 @@ function MainDashboard() {
 
 				<div className="flex items-center text-sm text-muted-foreground">
 					<div className="flex flex-col items-center">
-						<h1 className="text-sm text-nowrap sm:text-xl md:text-2xl lg:text-3xl font-semibold mb-2">
+						<h1 className="hidden text-nowrap sm:text-xl md:text-2xl lg:text-3xl font-semibold mb-2">
 							{getDailyGreeting()}{" "}
 							<span>{user?.user_metadata.full_name}</span>!
 						</h1>
@@ -484,15 +484,16 @@ function MainDashboard() {
 				{tasks.length > 0 ? (
 					<section>
 						<div className="flex justify-between items-center mb-6">
-							<h2 className="text-2xl font-semibold">
-								Daily Schedule & Tasks
+							<h2 className="text-xl sm:text-2xl font-semibold">
+								Daily Schedule <br className="sm:hidden" /> &
+								Tasks
 							</h2>
 							<div className="flex items-center gap-4">
-								<div className="text-sm text-muted-foreground">
+								<div className="hidden sm:text-sm text-muted-foreground">
 									Double-click any task to edit • Hover to see
 									edit button
 								</div>
-								<div className="flex gap-2">
+								<div className="flex flex-col gap-2 sm:flex-row sm:gap-2">
 									<Button
 										variant="outline"
 										size="sm"
