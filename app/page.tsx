@@ -387,7 +387,7 @@ function MainDashboard() {
 
 				<div className="flex items-center text-sm text-muted-foreground">
 					<div className="flex flex-col items-center">
-						<h1 className="hidden text-nowrap sm:text-xl md:text-2xl lg:text-3xl font-semibold mb-2">
+						<h1 className="hidden text-nowrap sm:inline sm:text-xl md:text-2xl lg:text-3xl font-semibold mb-2">
 							{getDailyGreeting()}{" "}
 							<span>{user?.user_metadata.full_name}</span>!
 						</h1>
@@ -489,7 +489,7 @@ function MainDashboard() {
 								Tasks
 							</h2>
 							<div className="flex items-center gap-4">
-								<div className="hidden sm:text-sm text-muted-foreground">
+								<div className="hidden sm:inline sm:text-sm text-muted-foreground">
 									Double-click any task to edit • Hover to see
 									edit button
 								</div>
